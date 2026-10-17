@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#82bef8">
+    <meta name="robots" content="noindex">
+    <title>Vườn hoa của hai người 🌸</title>
+    <link rel="icon" type="image/png" href="/img/logo.png">
+    <link rel="apple-touch-icon" href="/img/logo.png">
+    <link rel="stylesheet" href="/css/fonts.css">
+    <link rel="stylesheet" href="/css/game.css">
+</head>
+
+<body>
+<div id="app">
+    <div id="splash"><img src="/img/logo.png" alt=""><p>Vườn hoa của hai người</p><small>đang tưới nước…</small></div>
+    <canvas id="world"></canvas>
+    <canvas id="words"></canvas>
+    <div id="partner" hidden><span class="dot"></span><span class="name"></span></div>
+
+    <header id="top">
+        <div class="pill res">
+            <span title="Hạt sương — tiền trong vườn">✨<b id="dew">0</b></span>
+            <span title="Phân bón">🧪<b id="fert">0</b></span>
+            <span id="compost" title="Phân ủ: đủ 3 thì ủ được 1 phân bón">🍂<b id="cmp">0</b></span>
+        </div>
+        <button class="pill" id="clock" title="Giờ trong vườn và thời tiết (→ dự báo)">☀️ 05:00</button>
+    </header>
+    <button id="finBtn" hidden>🎆 Mở Lễ hội hoa</button>
+    <div id="toasts"></div>
+    <div id="who"></div>
+    <div id="hint" hidden></div>
+
+    <button class="pill bond" id="bond" title="Gắn kết — tăng khi hai người cùng ở trong vườn">💞 <b>Cấp <span id="lvl">0</span></b><i><em id="xpbar"></em></i><small id="bondTx"></small></button>
+    <nav id="bar">
+        <button id="seedBtn"><i id="seedIcon">🌱</i><span id="seedName">Hạt giống</span></button>
+        <button id="shopBtn"><i>🛒</i><span>Chợ</span></button>
+        <button id="chatBtn"><i>💌</i><span id="chatName">Lời nhắn</span><b class="badge" id="chatBadge" hidden>0</b></button>
+        <button id="bookBtn"><i>📖</i><span>Sổ tay</span></button>
+        <button id="helpBtn"><i id="helpIcon">❓</i><span id="helpName">Hướng dẫn</span><b class="badge" id="toolBadge" hidden>0</b></button>
+    </nav>
+
+    <div id="tools" hidden></div>
+    <button id="nowPlaying" hidden>🎵 <span></span></button>
+    <div id="radio" class="closed">
+        <div class="panel">
+            <header><h2>📻 Radio vườn</h2><button data-r="close" aria-label="Đóng">✕</button></header>
+            <div class="rbody">
+                <div class="screen"><div id="ytHost"></div><p id="rEmpty">Dán link YouTube (một bài hoặc cả danh sách phát) — nhạc sẽ phát dưới nền cho cả hai người cùng nghe 🎧</p><button id="rTap" data-r="tap" hidden>▶ Chạm để nghe cùng</button></div>
+                <p class="now"><b id="rTitle"></b><small id="rBy"></small></p>
+                <div class="seek"><span id="rCur">0:00</span><input type="range" id="rSeek" min="0" max="1" step="1" value="0" aria-label="Thời điểm"><span id="rDur">0:00</span></div>
+                <div class="ctl"><button data-r="prev" title="Bài trước">⏮</button><button data-r="back" title="Lùi 10 giây">⏪</button><button data-r="toggle" id="rPlay" class="big">▶</button><button data-r="fwd" title="Tới 10 giây">⏩</button><button data-r="next" title="Bài sau">⏭</button></div>
+                <div class="vol"><span>🔈</span><input type="range" id="rVol" min="0" max="100" aria-label="Âm lượng"><button data-r="mute" id="rMute"></button></div>
+                <form id="rForm"><input id="rLink" placeholder="Dán link YouTube…" autocomplete="off" inputmode="url"><button>Thêm</button></form>
+                <div class="rsec"><span>Danh sách phát</span><button data-r="clear">Xoá hết</button></div>
+                <ol id="rList"></ol>
+                <p class="rnote">Hai bạn nghe chung một bài: ai tua, chuyển bài hay tạm dừng thì người kia cũng theo. Âm lượng và nút tắt chỉ áp dụng cho máy mình. Khi radio phát, nhạc nền của vườn tự tắt và tiếng mưa, hiệu ứng nhỏ đi một nửa.</p>
+            </div>
+        </div>
+    </div>
+    <div id="menu" hidden></div>
+
+    <div id="sheet" hidden>
+        <div class="panel">
+            <header><h2 id="sheetTitle"></h2><button id="sheetClose" aria-label="Đóng">✕</button></header>
+            <div id="sheetBody"></div>
+        </div>
+    </div>
+
+    <div id="letter" hidden>
+        <div class="paper">
+            <div class="stamp">💌</div>
+            <p class="from" id="letterFrom"></p>
+            <p class="text" id="letterText"></p>
+            <button id="letterClose">Cất vào sổ tay</button>
+        </div>
+    </div>
+
+    <div id="away" hidden>
+        <div class="paper">
+            <div class="stamp">📜</div>
+            <p class="from">Trong lúc bạn vắng mặt…</p>
+            <ul id="awayList"></ul>
+            <button id="awayClose">Vào vườn thôi 🌱</button>
+        </div>
+    </div>
+
+    <div id="ask" hidden>
+        <p id="askQ"></p>
+        <div class="row"><button id="yes">💗 Đồng ý</button><button id="think">🌙 Cho mình suy nghĩ thêm</button></div>
+    </div>
+    <div id="reply" hidden></div>
+    <div id="end" hidden><button id="home">🌱 Về lại vườn</button></div>
+
+</div>
+    <script type="module" src="/js/game.js"></script>
+</body>
+
+</html>

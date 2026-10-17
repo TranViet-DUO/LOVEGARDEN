@@ -1,0 +1,993 @@
+:root {
+    --ink: #5b2f4f;
+    --card: rgba(255, 255, 255, 0.86);
+    --pink: #ff7aa8;
+    --shadow: 0 3px 14px rgba(60, 30, 70, 0.16);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-t: env(safe-area-inset-top, 0px);
+}
+
+html,
+body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    /* nền ngoài khung game (máy tính): trời hồng xanh + hoa văn chấm nhẹ */
+    background:
+        radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.5) 0 2px, transparent 3px) 0 0 / 48px 48px,
+        radial-gradient(circle at 70% 80%, rgba(255, 210, 230, 0.6) 0 3px, transparent 4px) 0 0 / 64px 64px,
+        linear-gradient(160deg, #ffd9e8 0%, #cfe6ff 55%, #d9f2d0 100%);
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: "Be Vietnam Pro", "Segoe UI", sans-serif;
+    color: var(--ink);
+}
+
+button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    border: 0;
+}
+
+/* khung game: điện thoại = toàn màn hình; máy tính = khung dọc ở giữa (transform -> mọi phần tử fixed bên trong neo theo khung) */
+#app {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: min(100vw, 62vh);
+    transform: translateX(-50%);
+    overflow: hidden;
+    background: #82bef8;
+}
+
+@media (min-aspect-ratio: 13/16) {
+    #app {
+        top: 2vh;
+        bottom: 2vh;
+        width: min(100vw, 58vh);
+        border-radius: 26px;
+        box-shadow: 0 20px 80px rgba(80, 40, 90, 0.35), 0 0 0 6px rgba(255, 255, 255, 0.6);
+    }
+}
+
+input,
+textarea {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+#world {
+    position: fixed;
+    left: 0;
+    top: 0;
+    image-rendering: pixelated;
+    will-change: transform;
+}
+
+#words {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.hide-ui #top,
+.hide-ui #bar,
+.hide-ui #who,
+.hide-ui #hint,
+.hide-ui #finBtn {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* ---------- thanh trên: gọn, trong suốt để thấy trời ---------- */
+#top {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    top: calc(8px + var(--safe-t));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 5px;
+    font-size: 13px;
+    font-weight: 700;
+    transition: opacity 0.6s;
+    pointer-events: none;
+}
+
+#top .res { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+#clock { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+
+/* thanh gắn kết: dải mảnh ngay trên thanh dưới */
+#bond {
+    position: fixed;
+    left: 50%;
+    bottom: calc(68px + var(--safe-b));
+    transform: translateX(-50%);
+    width: min(78%, 320px);
+    box-sizing: border-box;
+    justify-content: center;
+    padding: 3px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    transition: opacity 0.6s;
+}
+#bond small { font-size: 11px; font-weight: 600; opacity: 0.75; }
+.hide-ui #bond { opacity: 0; pointer-events: none; }
+
+.pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    white-space: nowrap;
+    pointer-events: auto;
+    backdrop-filter: blur(4px);
+}
+
+.pill span,
+.pill button {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0;
+    background: none;
+}
+
+#compost.ready {
+    animation: glow 1.2s infinite alternate;
+    border-radius: 999px;
+}
+
+@keyframes glow {
+    to { box-shadow: 0 0 0 3px #9be37a; }
+}
+
+.bond i {
+    position: relative;
+    flex: 1;
+    min-width: 30px;
+    height: 5px;
+    border-radius: 3px;
+    background: #f3d6e2;
+    overflow: hidden;
+}
+
+.bond em {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: var(--pink);
+}
+
+#clock .w {
+    font-weight: 600;
+    opacity: 0.8;
+}
+
+#finBtn {
+    position: fixed;
+    left: 50%;
+    top: calc(50px + var(--safe-t));
+    transform: translateX(-50%);
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ff9ac0, #ffd27a);
+    color: #fff;
+    font-weight: 800;
+    text-shadow: 0 1px 2px rgba(120, 40, 60, 0.5);
+    box-shadow: var(--shadow);
+    animation: glow 1s infinite alternate;
+    z-index: 4;
+}
+
+#finBtn[hidden] {
+    display: none;
+}
+
+/* ---------- gợi ý (ngay trên thanh dưới) ---------- */
+#hint {
+    position: fixed;
+    left: 50%;
+    bottom: calc(98px + var(--safe-b));
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100% - 32px);
+    box-sizing: border-box;
+    padding: 6px 12px;
+    border-radius: 12px;
+    background: rgba(255, 252, 240, 0.9);
+    box-shadow: var(--shadow);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+    text-align: center;
+    pointer-events: none;
+    transition: opacity 0.6s;
+}
+
+#hint[hidden] {
+    display: none;
+}
+
+#toasts {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    top: calc(52px + var(--safe-t));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.toast {
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 6px 13px;
+    border-radius: 999px;
+    background: rgba(70, 30, 70, 0.8);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    animation: toast 3.4s ease forwards;
+}
+
+.toast.good { background: rgba(40, 120, 70, 0.86); }
+.toast.bad { background: rgba(170, 50, 50, 0.86); }
+.toast.love { background: linear-gradient(90deg, #ff6b9a, #ff9a6b); }
+.toast.sky { background: rgba(60, 100, 160, 0.86); }
+
+@keyframes toast {
+    0% { opacity: 0; transform: translateY(-8px) scale(0.95); }
+    10%, 80% { opacity: 1; transform: none; }
+    100% { opacity: 0; transform: translateY(-6px); }
+}
+
+/* ---------- người chơi ---------- */
+#who {
+    position: fixed;
+    left: 8px;
+    top: calc(46px + var(--safe-t));
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    pointer-events: none;
+    font-size: 10px;
+    font-weight: 700;
+    transition: opacity 0.6s;
+}
+
+#who span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.7);
+}
+
+#who i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--c);
+}
+
+#who span.off { opacity: 0.55; }
+#who span.off i { background: #bbb; }
+
+#partner {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    pointer-events: none;
+    transition: transform 0.12s linear, opacity 0.4s;
+}
+
+#partner[hidden] { display: none; }
+
+#partner .dot {
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    background: var(--c);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+#partner .name {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--c);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* ---------- thanh dưới: 5 nút to, dễ bấm ---------- */
+#bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 8px calc(8px + var(--safe-b));
+    transition: opacity 0.6s;
+}
+
+#bar button {
+    flex: 0 1 72px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 6px 2px 5px;
+    border-radius: 16px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+#bar button i {
+    font-style: normal;
+    font-size: 21px;
+    line-height: 1.1;
+}
+
+#bar button span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#bar button:active {
+    transform: scale(0.95);
+}
+
+/* ---------- menu khi giữ tay trên luống ---------- */
+#menu {
+    position: fixed;
+    z-index: 25; /* trên cả thẻ hướng dẫn */
+    width: 210px;
+    padding: 8px;
+    border-radius: 18px;
+    background: rgba(255, 252, 246, 0.97);
+    box-shadow: 0 10px 34px rgba(60, 30, 70, 0.3);
+    animation: pop 0.18s ease-out;
+}
+
+#menu[hidden] { display: none; }
+
+@keyframes pop {
+    from { transform: scale(0.85); opacity: 0; }
+}
+
+#menu .info {
+    margin: 2px 4px 6px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: #7d5670;
+}
+
+#menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 9px 10px;
+    border-radius: 12px;
+    background: none;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: left;
+}
+
+#menu button:hover,
+#menu button:active {
+    background: #ffeef4;
+}
+
+#menu button:disabled {
+    opacity: 0.4;
+}
+
+/* ---------- bảng (chợ, hạt giống, sổ tay) ---------- */
+#sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(40, 20, 50, 0.35);
+}
+
+#sheet[hidden],
+#letter[hidden],
+#away[hidden] { display: none; }
+
+#sheet .panel {
+    width: min(100%, 520px);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    border-radius: 22px 22px 0 0;
+    background: #fffaf3;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25);
+    animation: up 0.25s ease-out;
+    touch-action: pan-y;
+}
+
+@keyframes up {
+    from { transform: translateY(40px); opacity: 0; }
+}
+
+#sheet header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px 6px;
+}
+
+#sheet h2 {
+    margin: 0;
+    font: 400 24px Pacifico, cursive;
+}
+
+#sheetClose {
+    background: none;
+    font-size: 20px;
+}
+
+#sheetBody {
+    overflow-y: auto;
+    padding: 0 14px calc(18px + var(--safe-b));
+    user-select: text;
+}
+
+.tabs {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    gap: 6px;
+    padding: 6px 0 8px;
+    background: #fffaf3;
+}
+
+.tabs button {
+    flex: 1;
+    padding: 8px 4px;
+    border-radius: 999px;
+    background: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 1px 4px rgba(90, 40, 70, 0.1);
+}
+
+.tabs button.on {
+    background: #ffd9e6;
+}
+
+.sec {
+    margin: 12px 4px 6px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #b0708f;
+}
+
+.item {
+    display: grid;
+    grid-template-columns: 38px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    margin: 6px 0;
+    padding: 9px 10px;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(90, 40, 70, 0.08);
+}
+
+.item .ic {
+    font-size: 25px;
+    text-align: center;
+}
+
+.item b {
+    display: block;
+    font-size: 14px;
+}
+
+.item small {
+    display: block;
+    color: #8d6b80;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.item .act {
+    display: flex;
+    gap: 5px;
+}
+
+.item button {
+    padding: 7px 11px;
+    border-radius: 999px;
+    background: #ffe1ec;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.item button:disabled { opacity: 0.4; }
+.item.sel { box-shadow: 0 0 0 2px #ffb84d; }
+
+.grid8 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+
+.grid8 div {
+    padding: 8px 4px;
+    border-radius: 12px;
+    background: #fff;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.grid8 div i {
+    display: block;
+    font-style: normal;
+    font-size: 24px;
+}
+
+.grid8 div.no {
+    opacity: 0.35;
+    filter: grayscale(1);
+}
+
+.note {
+    margin: 6px 0;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: #fff4f8;
+    font: 600 17px/1.45 "Dancing Script", cursive;
+}
+
+.soft {
+    width: 100%;
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid #f0c9d8;
+    border-radius: 12px;
+    background: #fff;
+    color: #c2457a;
+    font-weight: 700;
+}
+
+.danger {
+    width: 100%;
+    margin-top: 14px;
+    padding: 10px;
+    border: 1px dashed #d99;
+    border-radius: 12px;
+    background: none;
+    color: #b55;
+    font-weight: 700;
+}
+
+#sheetBody .cheat {
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(90, 40, 70, 0.12);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+/* ---------- lá thư / nhật ký vắng mặt ---------- */
+#letter,
+#away {
+    position: fixed;
+    inset: 0;
+    z-index: 12;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: rgba(40, 20, 50, 0.45);
+}
+
+.paper {
+    position: relative;
+    width: min(100%, 400px);
+    box-sizing: border-box;
+    padding: 30px 22px 20px;
+    border-radius: 8px;
+    background: repeating-linear-gradient(#fffaf0 0 29px, #f1e4d8 29px 30px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    text-align: center;
+    animation: unfold 0.7s cubic-bezier(.2, 1.3, .4, 1);
+}
+
+@keyframes unfold {
+    from { transform: scale(0.3) rotate(-8deg); opacity: 0; }
+}
+
+.paper .stamp {
+    position: absolute;
+    top: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 40px;
+}
+
+.paper .from {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 800;
+    color: #b0708f;
+}
+
+#letter .text {
+    margin: 0 0 18px;
+    font: 700 23px/1.5 "Dancing Script", cursive;
+    white-space: pre-line;
+}
+
+#awayList {
+    margin: 0 0 16px;
+    padding: 0;
+    list-style: none;
+    font-size: 14px;
+    line-height: 1.75;
+    text-align: left;
+}
+
+.paper button,
+#end button {
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: #ff8fb4;
+    color: #fff;
+    font-weight: 700;
+    box-shadow: var(--shadow);
+}
+
+/* ---------- hướng dẫn ---------- */
+#tour {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    pointer-events: none;
+}
+
+#tour[hidden] { display: none; }
+
+#tour .spot {
+    position: fixed;
+    box-shadow: 0 0 0 200vmax rgba(30, 15, 40, 0.55);
+    transition: all 0.35s ease;
+    pointer-events: none;
+}
+
+#tour .card {
+    position: fixed;
+    box-sizing: border-box;
+    padding: 14px 16px 12px;
+    border-radius: 18px;
+    background: #fffaf3;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    pointer-events: auto;
+    transition: top 0.35s ease;
+}
+
+#tour .title {
+    margin: 0 0 4px;
+    font: 400 20px Pacifico, cursive;
+}
+
+#tour .text {
+    margin: 0 0 12px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+#tour .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#tour .dots {
+    flex: 1;
+    font-size: 12px;
+    color: #b0708f;
+    font-weight: 700;
+}
+
+#tour .skip {
+    padding: 8px 10px;
+    background: none;
+    color: #9b7a8c;
+    font-weight: 600;
+}
+
+#tour .next {
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: #ff8fb4;
+    color: #fff;
+    font-weight: 800;
+}
+
+/* ---------- kết thúc / tỏ tình ---------- */
+#ask,
+#reply {
+    position: fixed;
+    left: 50%;
+    bottom: calc(80px + var(--safe-b));
+    transform: translateX(-50%);
+    width: min(92vw, 420px);
+    box-sizing: border-box;
+    padding: 18px 18px 16px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.93);
+    box-shadow: 0 10px 40px rgba(60, 20, 60, 0.3);
+    text-align: center;
+    animation: fadein 1.2s ease-out;
+    z-index: 6;
+}
+
+#ask[hidden],
+#reply[hidden],
+#end[hidden] { display: none; }
+
+#ask p {
+    margin: 0 0 14px;
+    font: 700 26px "Dancing Script", cursive;
+}
+
+#ask .row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+}
+
+#ask button {
+    padding: 10px 16px;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+#yes { background: #ff6b9a; color: #fff; }
+#think { background: #efe4f5; }
+
+#reply { font: 700 24px "Dancing Script", cursive; }
+
+#end {
+    position: fixed;
+    left: 50%;
+    bottom: calc(20px + var(--safe-b));
+    transform: translateX(-50%);
+    z-index: 6;
+    animation: fadein 1s ease-out;
+}
+
+@keyframes fadein {
+    from { opacity: 0; transform: translate(-50%, 10px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (max-width: 420px) {
+    #top { font-size: 12px; }
+    .pill { padding: 5px 8px; gap: 5px; }
+    #clock .w { display: none; }
+}
+
+@media (max-width: 340px) {
+    #top { font-size: 11px; left: 4px; right: 4px; gap: 3px; }
+    .pill { padding: 4px 6px; gap: 3px; }
+    #compost { display: none !important; }
+}
+
+/* ---------- huy hiệu, nút ủ phân ---------- */
+#bar button { position: relative; }
+.badge {
+    position: absolute;
+    top: 2px;
+    right: 8px;
+    min-width: 16px;
+    padding: 1px 4px;
+    border-radius: 999px;
+    background: #ff4d7d;
+    color: #fff;
+    font-size: 10px;
+    line-height: 14px;
+}
+.badge[hidden] { display: none; }
+#helpBtn.ready { animation: glow 1.2s infinite alternate; }
+
+/* ---------- giấy ghi chú ---------- */
+.memo {
+    position: relative;
+    margin: 8px 6px 12px;
+    padding: 14px 16px 10px;
+    border-radius: 3px;
+    background: linear-gradient(#fff6b8, #ffef9a);
+    box-shadow: 0 6px 14px rgba(120, 90, 30, 0.18);
+    transform: rotate(-1.2deg);
+}
+.memo.me { background: linear-gradient(#ffe3ee, #ffd3e2); transform: rotate(1deg); }
+.memo::before { /* băng dính */
+    content: "";
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    width: 56px;
+    height: 16px;
+    transform: translateX(-50%) rotate(-3deg);
+    background: rgba(255, 255, 255, 0.6);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.memo p { margin: 0 0 6px; font: 700 20px/1.4 "Dancing Script", cursive; white-space: pre-line; word-break: break-word; }
+.memo small { display: block; text-align: right; font-size: 11px; color: #9b7a6c; }
+#sheetBody .empty { text-align: center; color: #8d6b80; font-size: 13px; line-height: 1.5; }
+.quick { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.quick button { padding: 6px 10px; border-radius: 999px; background: #fff; box-shadow: 0 1px 4px rgba(90, 40, 70, 0.12); font-size: 12px; font-weight: 600; }
+.note-form { display: flex; flex-direction: column; gap: 8px; }
+.note-form textarea { box-sizing: border-box; width: 100%; padding: 12px 14px; border: 0; border-radius: 4px; background: repeating-linear-gradient(#fffbe0 0 27px, #f0e2b8 27px 28px); box-shadow: inset 0 0 0 1px #f0d9a0; font: 700 19px/28px "Dancing Script", cursive; color: var(--ink); resize: none; outline: none; }
+.note-form button { align-self: center; padding: 10px 20px; border-radius: 999px; background: #ff8fb4; color: #fff; font-weight: 800; }
+.old { margin-top: 14px; }
+.old summary { cursor: pointer; font-size: 13px; font-weight: 700; color: #b0708f; }
+.old .memo { transform: none; opacity: 0.85; }
+
+/* hướng dẫn: thẻ chuyển xanh khi làm đúng */
+#tour .card.done { box-shadow: 0 0 0 3px #8fd67a, 0 12px 40px rgba(0, 0, 0, 0.3); }
+
+/* ---------- màn chào có logo ---------- */
+#splash {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: radial-gradient(circle at 50% 42%, #fff8ef 0 35%, #ffe3ee 75%, #ffd3e2);
+    transition: opacity 0.7s, visibility 0.7s;
+}
+#splash img { width: min(46%, 220px); animation: sway 2.4s ease-in-out infinite alternate; transform-origin: 50% 90%; }
+#splash p { margin: 6px 0 0; font: 400 26px Pacifico, cursive; color: #6b3a5c; }
+#splash small { font-size: 12px; color: #b0708f; font-weight: 600; }
+#splash.out { opacity: 0; visibility: hidden; pointer-events: none; }
+@keyframes sway { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+
+/* ---------- bảng vật dụng (mở từ nút 🧰) ---------- */
+#tools {
+    position: fixed;
+    right: 8px;
+    bottom: calc(70px + var(--safe-b));
+    z-index: 9;
+    width: min(320px, calc(100% - 16px));
+    max-height: 58%;
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 8px;
+    border-radius: 20px;
+    background: rgba(255, 251, 245, 0.98);
+    box-shadow: 0 12px 40px rgba(60, 30, 70, 0.32);
+    animation: pop 0.18s ease-out;
+    transform-origin: 90% 100%;
+    touch-action: pan-y;
+}
+#tools[hidden] { display: none; }
+#tools .tool {
+    display: grid;
+    grid-template-columns: 40px 1fr auto;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 54px;
+    margin: 0 0 6px;
+    padding: 6px 10px;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(90, 40, 70, 0.1);
+    text-align: left;
+}
+#tools .tool i { font-style: normal; font-size: 26px; text-align: center; }
+#tools .tool b { display: block; font-size: 14px; }
+#tools .tool small { display: block; font-size: 11px; line-height: 1.3; color: #8d6b80; }
+#tools .tool em { font-style: normal; font-size: 11px; font-weight: 700; color: #b0708f; white-space: nowrap; }
+#tools .tool.on { background: linear-gradient(90deg, #fff, #ecffe4); box-shadow: 0 0 0 2px #9be37a; }
+#tools .tool.on em { color: #3f9a3a; }
+#tools .tool:disabled { opacity: 0.55; }
+#tools .tool.shop { min-height: 42px; background: #ffeef4; }
+#tools .tsec { margin: 8px 4px 4px; font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #b0708f; }
+#tools .auto { display: flex; align-items: center; gap: 8px; padding: 4px 8px; font-size: 13px; font-weight: 600; }
+#tools .auto i { font-style: normal; font-size: 18px; }
+#tools .dot { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: #c9e8bf; }
+#tools .dot.busy { background: #52c24a; box-shadow: 0 0 0 3px rgba(82, 194, 74, 0.25); }
+#tools .empty { text-align: center; color: #8d6b80; font-size: 13px; line-height: 1.5; padding: 4px 6px; }
+#helpBtn.ready i { animation: wiggle 1.4s infinite; }
+@keyframes wiggle { 0%, 70%, 100% { transform: none; } 80% { transform: rotate(-12deg); } 90% { transform: rotate(10deg); } }
+
+/* điều ước, hoa lấp lánh, bưu thiếp */
+.wbar { height: 5px; margin-top: 4px; border-radius: 3px; background: #f3e2ea; overflow: hidden; }
+.wbar i { display: block; height: 100%; background: linear-gradient(90deg, #ffb4cf, #ff7aa8); }
+.grid8 div.shiny { background: linear-gradient(135deg, #fff9d6, #ffe6f2); box-shadow: 0 0 0 1px #ffd86b; }
+.postcard { display: block; width: 100%; border-radius: 10px; box-shadow: 0 6px 20px rgba(60, 30, 70, 0.2); }
+.row2 { display: flex; gap: 8px; }
+.row2 .soft { flex: 1; text-align: center; text-decoration: none; box-sizing: border-box; }
+
+/* ---------- radio ---------- */
+#radio { position: fixed; inset: 0; z-index: 11; display: flex; align-items: flex-end; justify-content: center; background: rgba(40, 20, 50, 0.35); transition: background 0.3s; }
+/* đóng: trượt ra ngoài nhưng vẫn giữ trình phát YouTube để nhạc chạy tiếp */
+#radio.closed { background: transparent; pointer-events: none; }
+#radio.closed .panel { transform: translateY(105%); opacity: 0; }
+#radio .panel { width: min(100%, 520px); max-height: 88%; display: flex; flex-direction: column; border-radius: 22px 22px 0 0; background: #fffaf3; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25); transition: transform 0.3s ease, opacity 0.3s; touch-action: pan-y; }
+#radio header { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px 4px; }
+#radio h2 { margin: 0; font: 400 24px Pacifico, cursive; }
+#radio header button { background: none; font-size: 20px; }
+#radio .rbody { overflow-y: auto; padding: 0 14px calc(16px + var(--safe-b)); }
+#radio .screen { position: relative; aspect-ratio: 16 / 9; max-height: 30vh; margin: 0 auto 8px; border-radius: 14px; overflow: hidden; background: #2b2233; }
+#ytHost, #ytHost iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+#rEmpty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 14px; color: #f6e8f0; font-size: 13px; line-height: 1.5; text-align: center; }
+#rEmpty[hidden], #rTap[hidden] { display: none; }
+#rTap { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 10px 18px; border-radius: 999px; background: #ff8fb4; color: #fff; font-weight: 800; box-shadow: var(--shadow); }
+#radio .now { margin: 2px 2px 6px; }
+#radio .now b { display: block; font-size: 15px; line-height: 1.35; }
+#radio .now small { font-size: 11px; color: #b0708f; font-weight: 600; }
+#radio .seek, #radio .vol { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: #8d6b80; }
+#radio input[type=range] { flex: 1; accent-color: #ff7aa8; min-width: 0; }
+#radio .ctl { display: flex; justify-content: center; gap: 10px; margin: 6px 0 8px; }
+#radio .ctl button { width: 46px; height: 46px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(90, 40, 70, 0.15); font-size: 18px; }
+#radio .ctl button.big { width: 58px; height: 58px; background: #ff8fb4; color: #fff; font-size: 24px; }
+#radio .vol button { padding: 6px 10px; border-radius: 999px; background: #fff; box-shadow: 0 1px 4px rgba(90, 40, 70, 0.12); font-size: 12px; font-weight: 700; white-space: nowrap; }
+#rForm { display: flex; gap: 8px; margin: 12px 0 6px; }
+#rForm input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid #f0c9d8; border-radius: 999px; font: inherit; font-size: 14px; outline: none; }
+#rForm button { padding: 10px 16px; border-radius: 999px; background: #ff8fb4; color: #fff; font-weight: 800; }
+#radio .rsec { display: flex; justify-content: space-between; align-items: center; margin: 10px 4px 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #b0708f; }
+#radio .rsec button { background: none; color: #b55; font-size: 12px; font-weight: 700; text-transform: none; letter-spacing: 0; }
+#rList { margin: 0; padding: 0; list-style: none; }
+#rList li { display: flex; gap: 4px; margin: 4px 0; }
+#rList li button:first-child { flex: 1; display: flex; gap: 8px; align-items: center; min-width: 0; padding: 8px 10px; border-radius: 12px; background: #fff; text-align: left; font-size: 13px; }
+#rList li button:first-child span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#rList li button:first-child b { color: #b0708f; font-size: 11px; }
+#rList li.on button:first-child { background: #ffe1ec; font-weight: 700; }
+#rList li button:last-child { width: 34px; border-radius: 12px; background: none; color: #b08a9c; }
+#radio .rnote { font-size: 11px; line-height: 1.5; color: #8d6b80; }
+#nowPlaying { position: fixed; right: 8px; top: calc(46px + var(--safe-t)); max-width: 55%; padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.8); box-shadow: var(--shadow); font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 4; }
+#nowPlaying[hidden] { display: none; }
+.hide-ui #nowPlaying { opacity: 0; pointer-events: none; }
+.chip { display: inline-block; margin: 2px; padding: 4px 9px; border-radius: 999px; background: #ffe6f0; font-size: 12px; font-weight: 700; }

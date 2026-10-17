@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>Khu vườn của hai người 🌸</title>
+    <link rel="icon" type="image/png" href="/img/logo.png">
+    <link rel="stylesheet" href="/css/fonts.css">
+    <style>
+        html, body { margin: 0; height: 100%; }
+        body { display: grid; place-items: center; padding: 16px; box-sizing: border-box; background: linear-gradient(#82bef8, #dcefff 60%, #8fcf7a 60%, #5fa34f); font-family: "Be Vietnam Pro", sans-serif; color: #6b3a5c; }
+        main { max-width: 420px; padding: 28px 26px; border-radius: 22px; background: rgba(255, 255, 255, 0.88); box-shadow: 0 10px 40px rgba(60, 40, 90, 0.2); text-align: center; }
+        h1 { margin: 0 0 10px; font: 400 34px Pacifico, cursive; }
+        p { margin: 8px 0; line-height: 1.55; }
+        a { color: #c2457a; font-weight: 600; }
+        .btn { display: inline-block; padding: 10px 18px; border-radius: 999px; background: #ff8fb4; color: #fff; text-decoration: none; }
+    </style>
+</head>
+
+<body>
+    <main>
+        <img src="/img/logo.png" alt="" style="width:150px;margin:-10px 0 4px">
+        <h1>Khu vườn nhỏ</h1>
+        <p>Mỗi khu vườn ở đây dành riêng cho hai người, và chỉ mở bằng đường dẫn được gửi tặng.</p>
+        <p>Nếu bạn nhận được một đường dẫn, hãy mở đúng đường dẫn đó nhé.</p>
+        <p id="back" hidden><a class="btn" href="#"></a></p>
+        <p><a href="/play">Thử trồng hoa một mình →</a></p>
+    </main>
+    <script>
+        // đã từng vào một khu vườn bằng đường dẫn riêng trên máy này -> nút quay lại
+        try { const g = JSON.parse(localStorage.getItem('vuon-hoa-last')); if (g && g.slug) { const a = document.querySelector('#back a'); a.href = '/' + encodeURIComponent(g.slug); a.textContent = `🌷 Quay lại khu vườn của ${g.me} & ${g.partner}`; document.getElementById('back').hidden = false; } } catch { }
+    </script>
+</body>
+
+</html>

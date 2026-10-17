@@ -1,0 +1,16 @@
+{
+    "name": "vuon-hoa",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "wrangler dev",
+        "dev:fresh": "node scripts/clean.mjs && wrangler dev",
+        "clean": "node scripts/clean.mjs",
+        "deploy": "wrangler deploy",
+        "links": "node scripts/links.mjs",
+        "balance": "node scripts/balance.mjs"
+    },
+    "devDependencies": {
+        "wrangler": "^4.151.1"
+    }
+}
