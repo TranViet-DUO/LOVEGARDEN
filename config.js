@@ -26,7 +26,6 @@ export default {
     // NHỚ ĐỔI THÀNH false trước khi gửi đường dẫn thật cho người khác. (Trang /play chơi thử luôn có cheat.)
     cheats: true,
     gardens: [
-      
         {
             id: 'minh-lan',
             mode: 'to-tinh',
