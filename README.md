@@ -58,7 +58,7 @@ Game nông trại hoa pixel art chạy trên trình duyệt, cho **hai người 
 - **Lễ hội hoa** mở khi đủ 3 điều kiện:
   - sưu tập 14 trên 20 loài,
   - gắn kết cấp 3,
-  - 10 bông cùng nở một lúc.
+  - 10 bông cùng nở một lúc. Khi đã đủ hai điều kiện trên, vườn mở **sự kiện ẩn**: một lá thư mời hiện lên, hoa tươi lâu gấp 3, chạm vào hoa không còn hái (muốn hái thì giữ tay hoặc chạm 2 lần) — để hai người chủ động gom đủ 10 bông.
 
   Hai người cùng vuốt gọi gió, cả vườn và ngọn đồi hoa bay lên trời, xếp thành chữ, rồi hiện lời nhắn (và câu hỏi nếu là tỏ tình).
   Sau lễ hội vườn vẫn tiếp tục: điều ước làm đồi nở thêm, đêm nào cũng có đèn trời, săn hoa lấp lánh, xem lại lễ hội bất cứ lúc nào.

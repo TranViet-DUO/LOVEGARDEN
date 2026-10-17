@@ -7,7 +7,7 @@ import { buildFlowerText, drawFlower, drawLeaf } from './lib/flower-text.js';
 import { FLOWER_FONTS, TEXT_FONTS, SIGN_FONT, FONT_FILES, fontAt } from './lib/fonts.js';
 import { hash, clamp, lerp, lerp3 } from './lib/math.js';
 import { put, disc, drawHeart } from './lib/draw.js';
-import { advance, other, weatherAt, starAt, isNight, canFinale, bookCount, SPECIES, SPECIES_ORDER, SHOP, ACTS, AUTO, EVENTS, WISHES, xpFor, levelGift, hybridName, FULL_BLOOM, BOOK_GOAL, COLS, ROWS, DAY, DIG_TAPS, HILL_MAX, MAX_PLOTS, LEAVE_GRACE, WEATHER, WEATHER_LEN, plotPrice, canExpand, ownedPlots, cdLeft, has } from './rules.js';
+import { advance, other, weatherAt, starAt, isNight, canFinale, bookCount, SPECIES, SPECIES_ORDER, SHOP, ACTS, AUTO, EVENTS, WISHES, xpFor, levelGift, hybridName, FULL_BLOOM, QUEST_LIFE, bloomNow, bloomQuest, BOOK_GOAL, COLS, ROWS, DAY, DIG_TAPS, HILL_MAX, MAX_PLOTS, LEAVE_GRACE, WEATHER, WEATHER_LEN, plotPrice, canExpand, ownedPlots, cdLeft, has } from './rules.js';
 import { connectGarden, localGarden } from './net.js';
 import { drawBed, drawPlant, drawStatus, drawSky, drawRain, nightTint, drawEvent, drawStar, drawLights, drawWeatherFx, skyColors, spColor } from './art.js';
 import { drawYard, drawCritters } from './yard.js';
@@ -279,7 +279,21 @@ function showAnswer() {
         : ans === 'yes' ? `💗 ${NAME[THEM]} sẽ rất hạnh phúc đấy` : `🌙 Cảm ơn bạn đã thành thật với ${NAME[THEM]}`;
     if (ans === 'yes' && !fin.hearts) { fin.hearts = true; audio.sfx('level'); for (let k = 0; k < 40; k++) P.push({ kind: 'heart', x: Math.random() * BW, y: BH + Math.random() * BH * 0.3, vx: 0, vy: -(10 + Math.random() * 12) * sc, rot: Math.random() * 6, life: 0, max: 9, col: [[255, 110, 150], [255, 160, 190], [240, 70, 110]][k % 3], sz: sc * (1 + Math.random() * 1.2) }); }
 }
-const AFTER_KEY = `vuon-hoa-after-${slug || 'play'}`;
+const AFTER_KEY = `vuon-hoa-after-${slug || 'play'}`, QUEST_KEY = `vuon-hoa-quest-${slug || 'play'}`;
+function checkQuest() { // lần đầu thấy sự kiện ẩn (mỗi vòng vườn một lần)
+    if (fin || !bloomQuest(st) || store.get(QUEST_KEY) === st.round) return;
+    store.set(QUEST_KEY, st.round); audio.sfx('letter');
+    showLetter('Sự kiện ẩn 🌸', `Khu vườn đã sẵn sàng cho một điều đặc biệt…
+
+Hãy để ${FULL_BLOOM} bông hoa cùng nở rộ một lúc để mở cánh cửa cuối cùng.
+
+`
+        + `🌸 Từ giờ hoa tươi lâu gấp ${QUEST_LIFE} lần — cứ thong thả gieo thêm, chăm đều tay rồi chờ hoa nở cùng nhau.
+`
+        + '✋ Chạm vào hoa sẽ không hái nữa; muốn hái thì giữ tay hoặc chạm 2 lần.'
+        + (SOLO ? '' : `
+💞 Rủ ${NAME[THEM]} cùng chăm cho nhanh nhé!`));
+}
 function leaveFinale() {
     seenLift = st.liftAt; store.set(LIFT_KEY, seenLift);
     fin = null; document.body.classList.remove('hide-ui');
@@ -306,7 +320,7 @@ function onMessage(m) {
     while (knownNotes < notesText.length) { showLetter(`Lá thư số ${knownNotes + 1}${SOLO ? '' : ` · từ ${info.sender}`}`, notesText[knownNotes]); audio.sfx('letter'); knownNotes++; }
     if (st.liftAt && st.liftAt !== seenLift && !fin) buildFinale(t - Math.min(sinceServer(st.liftAt), 0.5)); // lần đầu thấy đoạn kết: chiếu từ đầu
     radio.update(st.radio || null);
-    showAnswer(); hud();
+    showAnswer(); hud(); checkQuest();
     if (sheetOpen()) refreshOpenSheet();
 }
 // hiệu ứng / thông báo cho từng sự kiện (từ máy chủ, hoặc do máy mình tự mô phỏng thời gian trôi)
@@ -353,6 +367,7 @@ function onFx(f) {
         case 'fade': toast(`🍂 ${SPN(f.sp)} sắp tàn — hái nhanh kẻo phí!`, 'bad', 'fd' + f.i); break;
         case 'hill': audio.sfx('level'); toast(`⛰️ Đồi hoa đã phủ ${f.pct}%!${f.pct >= 100 ? ' Kín cả ngọn đồi rồi 💐' : ''}`, 'love', 'hill' + f.pct, 600000); break;
         case 'hillLoss': toast(`🥀 ${f.n} bông trên đồi héo theo…`, 'bad', 'hl', 4000); break;
+        case 'quest': audio.sfx('level'); toast('🌸 Sự kiện ẩn hoàn thành! Lễ hội hoa đã sẵn sàng 🎆', 'love', 'quest', 600000); burst(BW / 2, BH * 0.7, 'heart', [255, 200, 120], 24, sc); break;
         case 'fullbloom': audio.sfx('level'); toast('🌸 VƯỜN NỞ RỘ! +50 ✨ +15 💞', 'love', 'full', 600000); burst(BW / 2, BH * 0.7, 'heart', [255, 150, 190], 20, sc); break;
     }
 }
@@ -463,7 +478,8 @@ function contextHint() {
     if (ps.some(p => p.st === 'soil' && p.left > 0 && p.left < LEAVE_GRACE * 0.6)) return hasSeed ? 'Luống trống sắp mọc cỏ hoang — gieo hạt ngay nhé 🌱' : 'Luống trống sắp mọc cỏ hoang — mua hạt ở 🛒 Chợ rồi gieo ngay';
     if (plants.some(p => p.bug)) return 'Có sâu! Chạm vào cây để bắt 🐛';
     if (plants.some(p => SPECIES[p.sp].needFert && !p.fed && !p.bloom && p.g >= 0.55)) return 'Mẫu đơn đang chờ bón phân 🧪 — chạm để bón';
-    if (plants.some(p => p.bloom && !p.faded)) return bookCount(st) >= BOOK_GOAL && (st.peak || 0) < FULL_BLOOM ? `Giữ hoa lại để ${FULL_BLOOM} bông cùng nở một lúc 🌸` : 'Hoa nở rồi — chạm để hái lấy ✨';
+    if (bloomQuest(st)) return `🌸 Sự kiện ẩn: ${bloomNow(st)}/${FULL_BLOOM} bông cùng nở — hoa tươi lâu gấp ${QUEST_LIFE}, giữ lại đừng hái nhé`;
+    if (plants.some(p => p.bloom && !p.faded)) return 'Hoa nở rồi — chạm để hái lấy ✨';
     if (ps.some(p => p.st === 'dead')) return 'Chạm cây khô để dọn, được 🍂 phân ủ';
     if (ps.some(p => p.weed > 0.4)) return 'Cỏ dại đang lan — chạm để nhổ';
     if (st.inv.compost >= 3 && st.decor.thung) return 'Đủ 3 🍂 — chạm thùng ủ phân (hoặc nút 🍂) để ủ thành phân bón';
@@ -519,7 +535,7 @@ function bookHTML() {
         <div class="sec">${st.done ? 'Lễ hội hoa ✓ — vườn vẫn tiếp tục' : 'Mục tiêu Lễ hội hoa'}</div>
         ${itemRow('📖', `Sưu tập ${BOOK_GOAL} loài hoa`, `${nb}/${SPECIES_ORDER.length} loài đã nở`, nb >= BOOK_GOAL ? '✅' : '')}
         ${itemRow('💞', 'Gắn kết cấp 3', `${nxt}<br>Tăng khi hai người cùng ở trong vườn, cùng tưới, hái hoa, ước sao băng, làm điều ước. Không giới hạn cấp.`, st.lvl >= 3 ? '✅' : '')}
-        ${itemRow('🌸', 'Vườn nở rộ', `${FULL_BLOOM} bông cùng nở một lúc · cao nhất: ${st.peak || 0}`, st.peak >= FULL_BLOOM ? '✅' : '')}
+        ${itemRow('🌸', 'Vườn nở rộ', `${FULL_BLOOM} bông cùng nở một lúc · cao nhất: ${st.peak || 0}${bloomQuest(st) ? ` · đang có ${bloomNow(st)} 🌸 (sự kiện ẩn: hoa tươi lâu gấp ${QUEST_LIFE})` : st.rong || st.done ? '' : ' · tính khi có sự kiện ẩn (đủ loài + cấp 3)'}`, st.rong || st.done ? '✅' : '')}
         ${replay}
         <div class="sec">Đồi hoa</div>${itemRow('⛰️', `${(st.hill || '').length}/${HILL_MAX} bông trên đồi`, 'Mỗi bông hái được gieo 1 bông lên đồi; hoa trên đồi tự sinh thêm 1–3 bông cùng loài theo thời gian (nhanh hơn khi hai người cùng ở đây). Cây chết, hoa tàn bỏ phí → hoa trên đồi héo theo.', Math.floor((st.hill || '').length / HILL_MAX * 100) + '%')}
         <div class="sec">Bộ sưu tập (${nb}/${SPECIES_ORDER.length})</div><div class="grid8">${book}</div>
@@ -687,7 +703,10 @@ function tapPlot(i) { // việc phù hợp nhất cho luống này
     if (p.st === 'wild' || p.st === 'dead') return send('dig', i);
     if (p.st === 'plant') {
         if (p.bug) return send('bug', i);
-        if (p.bloom) return send('harvest', i);
+        if (p.bloom) { // sự kiện ẩn: chạm không hái, để gom đủ bông nở rộ (muốn hái thì giữ tay / chạm 2 lần)
+            if (bloomQuest(st) && !p.faded) { audio.sfx('tap'); return toast(`Đang gom ${FULL_BLOOM} bông nở rộ 🌸 — muốn hái thì giữ tay hoặc chạm 2 lần`, '', 'qhold'); }
+            return send('harvest', i);
+        }
         if (p.weed > 0.3) return send('dig', i);
         if (SPECIES[p.sp].needFert && !p.fed && p.g >= 0.55 && (st.inv.fert || st.inv.phanvang)) return send('fert', i, { kind: st.inv.fert ? 'fert' : 'phanvang' });
         if (p.w < 0.85) return send('water', i);

@@ -158,7 +158,7 @@ export const freshState = (seed = 1, keep = {}) => ({
     v: V, seed: seed | 0, gt: 40, real: 0, acc: 0, step: 0,
     plots: Array.from({ length: MAX_PLOTS }, (_, i) => START_OWN.includes(i) ? { st: 'soil', weed: 0 } : { st: 'locked' }),
     inv: { dew: 25, fert: 1, phanvang: 0, compost: 0, seeds: { cuc: 4, huongduong: 1 } },
-    xp: 0, lvl: 0, bondT: 0, peak: 0, hill: '', book: {}, shiny: {}, decor: {}, tools: {}, notes: 0, wb: -1,
+    xp: 0, lvl: 0, bondT: 0, peak: 0, rong: false, hill: '', book: {}, shiny: {}, decor: {}, tools: {}, notes: 0, wb: -1,
     cd: {}, until: {}, ev: null, evMin: -1, luck: 0, wxo: null, fstar: 0, wishes: [], wishDay: -1, wishDone: 0, busyAt: {},
     stats: { harvest: 0, died: 0, combos: 0, stars: 0, perfect: 0, events: 0 },
     // bộ đếm cộng dồn (để kể lại "trong lúc bạn vắng mặt")
@@ -186,8 +186,12 @@ export function starAt(st, gt = st.gt) {
     return { min, f: (s - 10) / 6, y: 0.06 + 0.14 * ihash(st.seed, min, 77, 2), dir: ihash(st.seed, min, 77, 3) < 0.5 ? 1 : -1 };
 }
 export const FULL_BLOOM = 10; // số bông cùng nở một lúc để đạt "Vườn nở rộ"
+export const QUEST_LIFE = 3;   // sự kiện ẩn "Vườn nở rộ": hoa tươi lâu gấp 3 (tàn khô cũng chậm gấp 3) để dễ gom đủ bông
+export const bloomNow = st => st.plots.filter(P => P.bloom && !P.faded).length;
 export const bookCount = st => SPECIES_ORDER.filter(s => st.book[s]).length;
-export const canFinale = st => bookCount(st) >= BOOK_GOAL && st.lvl >= 3 && st.peak >= FULL_BLOOM;
+/** sự kiện ẩn: đã đủ loài + cấp gắn kết; phải có FULL_BLOOM bông cùng nở TRONG sự kiện (st.rong) — nở rộ từ trước không tính */
+export const bloomQuest = st => !st.done && !st.rong && bookCount(st) >= BOOK_GOAL && st.lvl >= 3;
+export const canFinale = st => bookCount(st) >= BOOK_GOAL && st.lvl >= 3 && (st.rong || st.done);
 export const around = i => { const r = Math.floor(i / COLS), c = i % COLS, out = []; for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) { const rr = r + dr, cc = c + dc; if ((dr || dc) && rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS) out.push(rr * COLS + cc); } return out; };
 export const neighbors = i => { const r = Math.floor(i / COLS), c = i % COLS, out = []; for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { const rr = r + dr, cc = c + dc; if (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS) out.push(rr * COLS + cc); } return out; };
 const cnt = st => (st.cnt ||= freshState().cnt);
@@ -362,7 +366,7 @@ function stepSim(st, together, awake, ctx, fx) {
     const b = Math.floor(st.gt / WEATHER_LEN); if (b !== st.wb) { st.wb = b; C.w[W] = (C.w[W] || 0) + 1; fx.push({ k: 'weather', w: W }); }
     const weedK = 1, bugK = (W === 'fog' ? 1.6 : 1) * (active(st, 'nobug') ? 0 : 1), bothJoined = st.joined.gui && st.joined.nhan;
     const dryW = W === 'heat' ? 1.7 : W === 'fog' ? 0.5 : W === 'cloud' ? 0.8 : 1, mist = active(st, 'mist'), shield = active(st, 'shield');
-    const spreadK = W === 'wind' ? 2 : 1, cat = st.ev && st.ev.k === 'meo' ? st.ev.i : -1;
+    const spreadK = W === 'wind' ? 2 : 1, quest = bloomQuest(st), cat = st.ev && st.ev.k === 'meo' ? st.ev.i : -1;
     st.plots.forEach((P, i) => {
         if (P.st === 'wild' || P.st === 'locked') return;
         // luống trống bỏ không sau khi hái: cỏ hoang mọc lại
@@ -380,9 +384,9 @@ function stepSim(st, together, awake, ctx, fx) {
         // nở rồi: hoa tươi một lúc, không hái thì tàn rồi khô
         if (P.bloom) {
             P.age += STEP;
-            const life = S.life || 360;
+            const qk = quest ? QUEST_LIFE : 1, life = (S.life || 360) * qk;
             if (!P.faded && P.age > life) { P.faded = true; C.fade++; fx.push({ k: 'fade', i, sp: P.sp }); }
-            if (P.faded && P.age > life + 240) { reset(P, { st: 'dead', weed: P.weed }); fx.push({ k: 'wither', i }); loseHill(st, 2, fx); return; }
+            if (P.faded && P.age > life + 240 * qk) { reset(P, { st: 'dead', weed: P.weed }); fx.push({ k: 'wither', i }); loseHill(st, 2, fx); return; }
         }
         // sức khoẻ: khát lâu thì héo rồi chết; giông quật cây chưa nở; nắng gắt làm lan yếu (mái che "che chắn" thì không sao)
         if (P.w <= 0) {
@@ -433,8 +437,9 @@ function stepSim(st, together, awake, ctx, fx) {
         }
     });
     // vườn nở rộ: nhiều bông cùng khoe sắc một lúc
-    const open = st.plots.filter(P => P.bloom && !P.faded).length;
-    if (open > (st.peak || 0)) { st.peak = open; if (open === FULL_BLOOM) { st.inv.dew += 50; addXp(st, 15, fx, ctx); fx.push({ k: 'fullbloom' }); unlockNote(st, fx, ctx); for (const P of st.plots) if (P.bloom) addHill(st, P.sp, 2, fx); } }
+    const open = bloomNow(st);
+    if (open > (st.peak || 0)) { const was = st.peak || 0; st.peak = open; if (was < FULL_BLOOM && open >= FULL_BLOOM) { st.inv.dew += 50; addXp(st, 15, fx, ctx); fx.push({ k: 'fullbloom' }); unlockNote(st, fx, ctx); for (const P of st.plots) if (P.bloom) addHill(st, P.sp, 2, fx); } }
+    if (quest && open >= FULL_BLOOM) { st.rong = true; fx.push({ k: 'quest' }); } // hoàn thành sự kiện ẩn -> mở Lễ hội hoa
     // đồi hoa tự sinh sôi: mỗi bông thỉnh thoảng gieo thêm 1–3 bông cùng loài (khi có người trong vườn; hai người thì nhanh hơn)
     const hl = (st.hill || '').length;
     if (awake && hl && hl < HILL_MAX) {
@@ -646,12 +651,12 @@ export function apply(st, role, m, now, ctx = {}) {
                 case 'speed': st.speed = [1, 5, 20].includes(+m.n) ? +m.n : 1; break;
                 case 'xp': addXp(st, Math.max(50, Math.round((xpFor(st.lvl + 1) - xpFor(st.lvl)) * 0.6)), fx, ctx); break;
                 case 'book': for (const s of SPECIES_ORDER) st.book[s] = st.book[s] || 1; break;
-                case 'peak': st.peak = Math.max(st.peak || 0, FULL_BLOOM); break;
+                case 'peak': st.peak = Math.max(st.peak || 0, FULL_BLOOM); st.rong = true; break;
                 case 'note': unlockNote(st, fx, ctx); break;
                 case 'hill': for (let k = 0; k < 100; k++) addHill(st, SPECIES_ORDER[k % 19], 3, fx); break;
                 case 'hillfull': while ((st.hill || '').length < HILL_MAX) addHill(st, SPECIES_ORDER[st.hill.length % 19], 1, fx); break;
                 case 'hillclear': st.hill = ''; break;
-                case 'finale': for (const s of SPECIES_ORDER) st.book[s] = st.book[s] || 1; st.peak = Math.max(st.peak || 0, FULL_BLOOM); if (st.lvl < 3) addXp(st, xpFor(3) - st.xp, fx, ctx); break;
+                case 'finale': for (const s of SPECIES_ORDER) st.book[s] = st.book[s] || 1; st.peak = Math.max(st.peak || 0, FULL_BLOOM); st.rong = true; if (st.lvl < 3) addXp(st, xpFor(3) - st.xp, fx, ctx); break;
                 case 'unanswer': st.answer = null; break;
                 case 'unlift': st.liftAt = 0; st.fw = false; st.done = false; break;
                 default: return R;

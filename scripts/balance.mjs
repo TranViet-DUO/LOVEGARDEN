@@ -1,7 +1,7 @@
 // Cân bằng game: cho "bot" chăm vườn theo luật thật (public/js/rules.js) và đo thời gian tới Lễ hội hoa.
 //   npm run balance            -> so sánh 1 người / 2 người
 // Bot chơi khá chăm (mỗi người 1 thao tác mỗi `gap` giây) nhưng không hoàn hảo: thỉnh thoảng "đi vắng".
-import { freshState, advance, apply, starAt, canFinale, bookCount, plotPrice, ownedPlots, canExpand, cdLeft, has, SPECIES, SPECIES_ORDER, SHOP, ACTS, EVENTS, FULL_BLOOM, BOOK_GOAL, HILL_MAX } from '../public/js/rules.js';
+import { freshState, advance, apply, starAt, canFinale, bloomQuest, bookCount, plotPrice, ownedPlots, canExpand, cdLeft, has, SPECIES, SPECIES_ORDER, SHOP, ACTS, EVENTS, FULL_BLOOM, BOOK_GOAL, HILL_MAX } from '../public/js/rules.js';
 
 function play(players, { gap = 2.5, away = 0.12, seed = 7, limitMin = 240 } = {}) {
     const st = freshState(seed), roles = players === 2 ? ['nhan', 'gui'] : ['nhan'];
@@ -14,7 +14,7 @@ function play(players, { gap = 2.5, away = 0.12, seed = 7, limitMin = 240 } = {}
         now += 500;
         for (const f of advance(st, now, roles, ctx)) { if (f.k === 'die') log.died++; if (f.k === 'rewild') log.rewild++; if (f.k === 'ev') log.ev++; }
         if (!log.book && bookCount(st) >= BOOK_GOAL) log.book = Math.round(sec / 60);
-        if (!log.ro && st.peak >= FULL_BLOOM) log.ro = Math.round(sec / 60);
+        if (!log.ro && st.rong) log.ro = Math.round(sec / 60);
         if (!log.p10 && ownedPlots(st) >= 10) log.p10 = Math.round(sec / 60);
         if (st.lvl !== lastLvl) { lastLvl = st.lvl; log['lv' + st.lvl] = Math.round(sec / 60); }
         if (!log.h30 && sec % 60 === 0 && sec / 60 === 30) log.h30 = Math.round((st.hill || '').length / HILL_MAX * 100) + '%';
@@ -30,7 +30,7 @@ function play(players, { gap = 2.5, away = 0.12, seed = 7, limitMin = 240 } = {}
             if (st.inv.compost >= 3 && st.decor.thung && act({ type: 'compost' })) continue;
             if (st.ev && EVENTS[st.ev.k].tap && Math.random() < 0.6 && act({ type: 'ev' })) continue;
             if ((p = pick(P => P.bug)) && act({ type: 'bug', i: p[1] })) continue;
-            const hoard = bookCount(st) >= BOOK_GOAL && st.peak < FULL_BLOOM; // đủ bộ sưu tập rồi: giữ hoa lại cho vườn nở rộ
+            const hoard = bloomQuest(st); // sự kiện ẩn: giữ hoa lại cho vườn nở rộ
             if ((p = pick(P => P.bloom && (!hoard || P.faded))) && act({ type: 'harvest', i: p[1] })) continue;
             // nước: cây khát nhất; hai người cố tưới cùng cây để ăn combo
             const thirsty = plants.filter(([P]) => P.st === 'plant' && P.w < Math.max(0.4, (SPECIES[P.sp].minWater || 0) + 0.15)).sort((a, b) => a[0].w - b[0].w)[0];
