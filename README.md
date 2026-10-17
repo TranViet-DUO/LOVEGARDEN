@@ -1,5 +1,7 @@
 # 🌸 Vườn hoa của hai người
 
+**LOVEGARDEN** — dự án chơi game cùng người yêu, bản chill chill lofi.
+
 Game nông trại hoa pixel art chạy trên trình duyệt, cho **hai người cùng chăm một khu vườn từ xa**: khoảng 1–1,5 giờ nếu chơi cùng nhau, khoảng 2 giờ nếu chơi một mình. Phần thưởng cuối là một lời cảm ơn, hoặc một lời tỏ tình.
 
 > Tài liệu kỹ thuật đầy đủ (kiến trúc, luật, cách thêm nội dung): **[CLAUDE.md](CLAUDE.md)**
