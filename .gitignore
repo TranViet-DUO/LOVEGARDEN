@@ -1,5 +1,31 @@
+# Chỉ đẩy mã nguồn, tài liệu và skill lên git.
+
+# thư mục / file ẩn (cấu hình máy, dữ liệu wrangler, .env…) — trừ chính các file git và skill của dự án
+.*
+!.gitignore
+!.gitattributes
+!.claude/
+.claude/*
+!.claude/skills/
+
+# bí mật & cấu hình riêng từng máy (CLOUDFLARE_ACCOUNT_ID nằm trong .env)
+.env
+.env.*
+.dev.vars
+
+# thư viện, dữ liệu chạy thử, file tạm
 node_modules/
 .wrangler/
-.dev.vars
-_legacy/
+tmp/
+temp/
+*.tmp
+*.log
+*.bak
+Thumbs.db
+desktop.ini
+
+# ghi chú, video quảng bá, code cũ — chỉ để ở máy
+TODO.md
 promo/
+legacy/
+_legacy/

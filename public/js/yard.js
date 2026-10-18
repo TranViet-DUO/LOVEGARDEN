@@ -2,7 +2,7 @@
 // và các con vật nhỏ (chim sẻ trên hàng rào, sóc trên cây, thỏ chạy giữa các luống, bướm, ong quanh hoa, cú đêm).
 //  - Mọi hình dùng CHUNG một bộ dựng (`build`): cùng bảng màu, cùng hướng sáng (trên-trái), không viền đen; dựng một lần rồi lưu cache.
 //  - drawYard (vẽ trước các luống) trả về vùng chạm; drawCritters (vẽ sau các luống) chỉ để trang trí, không ảnh hưởng luật chơi.
-import { put, line } from './lib/draw.js';
+import { put, line, drawHeart } from './lib/draw.js';
 import { lerp3, hash } from './lib/math.js';
 
 // ---------- bảng màu chung: [sáng, vừa, tối] ----------
@@ -86,6 +86,16 @@ const SPR = {
     sparrow: f => build('sparrow' + f, 6, 5, g => g.str(0, 0, f ? ['b....b', '.bBBb.', '..bbbo', '..ff..', '......'] : ['..bb..', '.bBbbo', 'bbbff.', '.bff..', '..y...'], { b: [150, 110, 80], B: [112, 80, 56], o: [250, 170, 60], f: [240, 222, 194], y: [200, 150, 70] })),
     rabbit: f => build('rabbit' + f, 9, 7, g => g.str(0, 0, f ? ['.......ww', '......ww.', '..wwwwwwe', 'twwwwwwwp', '.wW....Ww', '.........', '.........'] : ['.....w.w.', '.....w.w.', '..wwwwwwe', '.wwwwwwwp', 'twwwwwww.', '.wWWwwW..', '..w..w...'], { w: [246, 242, 236], W: [212, 204, 196], e: DK, p: [255, 160, 180], t: [255, 255, 255] })),
     squirrel: f => build('squirrel' + f, 6, 8, g => g.str(0, 0, f ? ['..tt..', '.tttt.', 'tt.ss.', 't.sses', '..sss.', '..s.s.', '..s...', '......'] : ['.tt...', 'tttt..', 'tt.ss.', 't..sse', '...ss.', '..sss.', '..s.s.', '.....'], { t: [222, 142, 72], s: [190, 108, 54], e: DK })),
+    // cây kỷ niệm (sau Lễ hội): lớn theo số ngày hai người cùng ghé vườn — mầm, cây non… tới cây hoa hồng, rồi hoa vàng ở 100 ngày
+    memTree: s => build('memTree' + s, [9, 11, 15, 21, 27, 33, 37][s], [7, 14, 19, 27, 35, 41, 45][s], (g, w, h) => {
+        if (s === 0) { g.l(4, 6, 4, 2, G[2]); g.e(2.5, 2.5, 2, 1.3, G[1]); g.e(6.5, 2, 2, 1.3, G[0]); return; }
+        const cx = w / 2, top = Math.round(h * (s < 3 ? 0.5 : 0.42));
+        trunk(g, cx, top, h - 1, Math.max(1, s * 0.8), Math.max(2, s * 1.4));
+        if (s >= 3) { g.l(cx, top + h * 0.15, cx - w * 0.28, top - h * 0.02, BK[1]); g.l(cx, top + h * 0.1, cx + w * 0.3, top - h * 0.05, BK[1]); }
+        const R = w * 0.44, cy = h * (s < 3 ? 0.3 : 0.3), pal = s >= 6 ? [[255, 244, 196], [252, 214, 160], [236, 164, 150], [196, 116, 122]] : s >= 5 ? PK : G;
+        canopy(g, s < 3 ? [[cx, cy, R, R * 0.8]] : [[cx, cy, R, R * 0.72], [cx - R * 0.6, cy + R * 0.35, R * 0.5, R * 0.42], [cx + R * 0.6, cy + R * 0.35, R * 0.5, R * 0.42], [cx, cy - R * 0.45, R * 0.6, R * 0.45]], pal, 11 + s);
+        if (s >= 4) for (let k = 0; k < s * 4; k++) { const a = hash(k * 2.7 + s) * 6.28, r = R * 0.85 * Math.sqrt(hash(k * 5.1 + s)); g.p(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.72, s >= 5 ? [255, 250, 252] : PK[1]); } // nụ hoa / hoa trắng
+    }),
     owl: f => build('owl' + f, 7, 8, g => g.str(0, 0, ['.b...b.', 'bbbbbbb', f ? 'bfDfDfb' : 'bfEfEfb', 'bfffffb', 'bbbobbb', 'bBbbbBb', '.bbbbb.', '..y.y..'], { b: [150, 112, 82], B: [118, 86, 62], f: [232, 212, 176], E: [255, 214, 70], D: [118, 86, 62], o: [240, 170, 60], y: [220, 170, 70] }))
 };
 
@@ -115,12 +125,35 @@ function twinkle(C, x, y, t) {
  * Hàng rào, cây, thùng ủ, hòm thư, radio. o.ready(k): món dùng được (ngôi sao lấp lánh) · o.mail: có thư chưa đọc · o.music: radio đang phát
  * o.night: ban đêm (cây trên đồi mờ hơn). Trả về vùng chạm [{k, x0, y0, x1, y1}].
  */
+// tán lá theo mùa (sau Lễ hội): thu vàng đỏ, đông phủ tuyết. Chỉ đổi màu lá/hoa, giữ màu thân cây
+const isLeaf = c => c[1] > c[0] || c[2] >= c[1];
+const SEASON_TINT = {
+    thu: c => { if (!isLeaf(c)) return c; const l = (c[0] + c[1] + c[2]) / 3; return l > 190 ? [250, 196, 90] : l > 140 ? [232, 140, 60] : l > 100 ? [200, 96, 50] : [150, 70, 40]; },
+    dong: c => isLeaf(c) ? lerp3(c, [236, 242, 250], 0.7) : lerp3(c, [120, 110, 120], 0.2)
+};
+export const memTreeSpot = L => [Math.round(L.BW * 0.27), L.skyH - 2];
+
+/**
+ * Hàng rào, cây, thùng ủ, hòm thư, radio. o.ready(k): món dùng được (ngôi sao lấp lánh) · o.mail: có thư chưa đọc · o.music: radio đang phát
+ * o.night: ban đêm · o.season: mùa hiện tại (sau Lễ hội) · o.mem: { days, streak } cây kỷ niệm. Trả về vùng chạm [{k, x0, y0, x1, y1}].
+ */
 export function drawYard(C, L, st, o = {}) {
     NT = (o.dark ?? 1) < 1 ? { k: o.dark, sky: L.skyH } : null;
-    const D = st.decor, t = C.t, BW = L.BW, hits = [];
-    // cây nhỏ trên đồi (xa, nhạt màu như có sương)
-    const far = c => lerp3(c, [176, 208, 232], 0.35);
-    blit(C, SPR.hillTree(0), BW * 0.27, L.skyH - 4, { tint: far }); blit(C, SPR.hillTree(1), BW * 0.73, L.skyH - 6, { tint: far });
+    const D = st.decor, t = C.t, BW = L.BW, hits = [], sea = SEASON_TINT[o.season] || null;
+    // cây nhỏ trên đồi (xa, nhạt màu như có sương); sau Lễ hội cây bên trái là cây kỷ niệm
+    const far = c => lerp3(sea ? sea(c) : c, [176, 208, 232], 0.35);
+    if (!o.mem) blit(C, SPR.hillTree(0), BW * 0.27, L.skyH - 4, { tint: far });
+    blit(C, SPR.hillTree(1), BW * 0.73, L.skyH - 6, { tint: far });
+    if (o.mem) { // cây kỷ niệm: ruy băng cho mỗi ngày cùng ghé, tim bay lên khi đang giữ chuỗi ngày
+        const [x, y] = memTreeSpot(L), s = o.mem.stage, b = blit(C, SPR.memTree(s), x, y, { shadow: s ? 0.3 : 0 }), cw = b.x1 - b.x0, ch = b.y1 - b.y0;
+        if (s) for (let k = 0; k < Math.min(o.mem.days, 30); k++) {
+            const rx = b.x0 + cw * (0.18 + 0.64 * hash(k * 3.1 + 0.5)), ry = b.y0 + ch * (0.12 + 0.36 * hash(k * 7.3 + 0.2)), c = [[232, 60, 90], [255, 140, 180], [255, 214, 90], [140, 190, 255]][k % 4], sw = Math.round(Math.sin(t * 1.6 + k) * 0.6);
+            P(C, rx, ry + C.oy, c); P(C, rx + sw, ry + 1 + C.oy, c, 0.9); P(C, rx + sw, ry + 2 + C.oy, c, 0.6);
+        }
+        if (o.mem.streak >= 3) for (let j = 0; j < 2; j++) { const f = (t * 0.25 + j * 0.5) % 1; drawHeart(C.d, C.BW, C.H, x + Math.sin(f * 6 + j) * 3, b.y0 - f * 14 + C.oy, 1.1, [255, 120, 160], Math.sin(f * Math.PI) * 0.9); }
+        hits.push({ k: 'memtree', x0: b.x0 - 3, y0: b.y0 - 4, x1: b.x1 + 3, y1: b.y1 + 2 });
+        if (o.ready?.('memtree')) twinkle(C, x + cw / 2, b.y0 - 2, t);
+    }
     drawFence(C, L);
     // radio ngồi trên hàng rào; đang phát thì nốt nhạc bay lên
     { const [x, y] = SPOTS.radio(L), sw = o.music ? Math.round(Math.sin(t * 8)) * 0.5 : 0, b = blit(C, SPR.radio(), x + sw, y);
@@ -128,8 +161,8 @@ export function drawYard(C, L, st, o = {}) {
             for (let k = 0; k < 4; k++) P(C, nx + 2, ny + k + C.oy, c, a); P(C, nx, ny + 3 + C.oy, c, a); P(C, nx + 1, ny + 3 + C.oy, c, a); P(C, nx, ny + 4 + C.oy, c, a); P(C, nx + 1, ny + 4 + C.oy, c, a); P(C, nx + 3, ny + C.oy, c, a); }
         hits.push({ k: 'radio', x0: b.x0 - 3, y0: b.y0 - 3, x1: b.x1 + 3, y1: b.y1 + 2 }); if (o.ready?.('radio')) twinkle(C, x, b.y0 - 4, t); }
     // cây to hai góc
-    { const [x, y] = SPOTS.treeL(L); blit(C, SPR.bigTree(), x, y, { shadow: 0.35 }); }
-    { const [x, y] = SPOTS.treeR(L); blit(C, SPR.blossom(), x, y, { shadow: 0.35 }); }
+    { const [x, y] = SPOTS.treeL(L); blit(C, SPR.bigTree(), x, y, { shadow: 0.35, tint: sea }); }
+    { const [x, y] = SPOTS.treeR(L); blit(C, o.season === 'ha' ? SPR.bigTree() : SPR.blossom(), x, y, { shadow: 0.35, tint: sea, flip: o.season === 'ha' }); } // mùa hạ: cây hoa đã ra lá xanh
     // thùng ủ phân, hòm thư dưới gốc cây
     if (D.thung) { const [x, y] = SPOTS.thung(L), b = blit(C, SPR.bin(), x, y, { shadow: 0.45 }); for (let j = 0; j < Math.min(5, st.inv.compost); j++) { const lx = b.x0 + 2 + j * 1.8, ly = b.y0 - (j % 2); P(C, lx, ly + C.oy, j % 3 ? G[1] : [196, 150, 70]); P(C, lx + 1, ly + C.oy, G[0]); } hits.push({ k: 'thung', x0: b.x0 - 2, y0: b.y0 - 3, x1: b.x1 + 2, y1: b.y1 + 1 }); if (o.ready?.('thung')) twinkle(C, x, b.y0 - 5, t); }
     if (D.giay) { const [x, y] = SPOTS.giay(L), b = blit(C, SPR.mailbox(), x, y, { shadow: 0.5 }); const up = o.mail; line(C.d, BW, C.H, b.x0, b.y0 + 4 + C.oy, b.x0, b.y0 + (up ? -2 : 3) + C.oy, W[2], 1); for (let j = 0; j < 2; j++) P(C, b.x0 - 1 - j, b.y0 + (up ? -2 : 3) + C.oy, [232, 50, 60]); hits.push({ k: 'giay', x0: b.x0 - 3, y0: b.y0 - 3, x1: b.x1 + 2, y1: b.y1 + 1 }); if (up) twinkle(C, x, b.y0 - 5, t); }

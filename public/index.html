@@ -9,28 +9,399 @@
     <link rel="icon" type="image/png" href="/img/logo.png">
     <link rel="stylesheet" href="/css/fonts.css">
     <style>
-        html, body { margin: 0; height: 100%; }
-        body { display: grid; place-items: center; padding: 16px; box-sizing: border-box; background: linear-gradient(#82bef8, #dcefff 60%, #8fcf7a 60%, #5fa34f); font-family: "Be Vietnam Pro", sans-serif; color: #6b3a5c; }
-        main { max-width: 420px; padding: 28px 26px; border-radius: 22px; background: rgba(255, 255, 255, 0.88); box-shadow: 0 10px 40px rgba(60, 40, 90, 0.2); text-align: center; }
+        html { min-height: 100%; background: linear-gradient(#82bef8, #dcefff 55%, #8fcf7a 55%, #5fa34f) fixed; }
+        body { margin: 0; padding: 24px 16px 40px; box-sizing: border-box; font-family: "Be Vietnam Pro", sans-serif; color: #6b3a5c; }
+        main { max-width: 480px; margin: 0 auto; }
+        .card { box-sizing: border-box; padding: 26px 24px; margin-bottom: 18px; border-radius: 22px; background: rgba(255, 255, 255, 0.92); box-shadow: 0 10px 40px rgba(60, 40, 90, 0.2); }
+        .hero { text-align: center; }
         h1 { margin: 0 0 10px; font: 400 34px Pacifico, cursive; }
+        h2 { margin: 0 0 6px; font: 400 26px Pacifico, cursive; text-align: center; }
+        h3 { margin: 22px 0 8px; font-size: 15px; color: #c2457a; }
         p { margin: 8px 0; line-height: 1.55; }
         a { color: #c2457a; font-weight: 600; }
-        .btn { display: inline-block; padding: 10px 18px; border-radius: 999px; background: #ff8fb4; color: #fff; text-decoration: none; }
+        .btn { display: inline-block; padding: 11px 20px; border: 0; border-radius: 999px; background: #ff8fb4; color: #fff; font: 700 15px "Be Vietnam Pro", sans-serif; text-decoration: none; cursor: pointer; }
+        .btn:disabled { opacity: 0.6; cursor: default; }
+        .btn.ghost { background: #fff; color: #c2457a; border: 1px solid #f0c9d8; }
+        .btn.wide { display: block; width: 100%; margin-top: 10px; text-align: center; box-sizing: border-box; }
+        label { display: block; margin: 12px 0 4px; font-size: 14px; font-weight: 600; }
+        small, .hint { display: block; font-size: 12.5px; color: #8d6b80; font-weight: 500; line-height: 1.45; }
+        input[type=text], textarea, select { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #f0c9d8; border-radius: 12px; background: #fff; color: #5a2f4d; font: 500 15px "Be Vietnam Pro", sans-serif; }
+        textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+        input:focus, textarea:focus, select:focus { outline: 2px solid #ff8fb4; border-color: transparent; }
+        .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+        .mode { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+        .mode label { margin: 0; padding: 12px; border: 1px solid #f0c9d8; border-radius: 14px; text-align: center; cursor: pointer; background: #fff; }
+        .mode input { display: none; }
+        .tpl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0 6px; }
+        .tpl button { padding: 12px 6px; border: 1px solid #f0c9d8; border-radius: 14px; background: #fff; color: #6b3a5c; font: 600 14px "Be Vietnam Pro", sans-serif; cursor: pointer; line-height: 1.3; }
+        .tpl button i { display: block; font-style: normal; font-size: 22px; }
+        .tpl button.on { border-color: #ff8fb4; background: #fff0f5; box-shadow: 0 0 0 2px #ffc2d6; }
+        .mode label:has(input:checked) { border-color: #ff8fb4; background: #fff0f5; box-shadow: 0 0 0 2px #ffc2d6; }
+        .sw { display: flex; gap: 4px; margin-top: 6px; height: 18px; }
+        .sw i { flex: 1; border-radius: 6px; }
+        .custom { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+        .custom input[type=color] { width: 40px; height: 34px; padding: 0; border: 1px solid #f0c9d8; border-radius: 8px; background: none; }
+        details { margin-top: 18px; }
+        summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+        .check { display: flex; gap: 8px; align-items: flex-start; font-weight: 500; }
+        .err { color: #c0392b; font-weight: 600; min-height: 1em; }
+        .link { display: flex; gap: 6px; align-items: center; margin: 6px 0 14px; }
+        .link input { flex: 1; font-size: 13px; }
+        .link button { flex: none; padding: 9px 12px; border: 1px solid #f0c9d8; border-radius: 10px; background: #fff; color: #c2457a; font-weight: 700; cursor: pointer; }
+        .mine { list-style: none; padding: 0; margin: 8px 0 0; text-align: left; }
+        .mine li { display: flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-top: 1px dashed #f0c9d8; font-size: 14px; }
+        .steps { display: flex; gap: 4px; margin: 10px 0 4px; }
+        .steps button { flex: 1; min-width: 0; padding: 6px 2px 0; border: 0; border-top: 4px solid #f3d9e4; background: none; color: #b892a8; font: 600 11.5px "Be Vietnam Pro", sans-serif; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .steps button.done { border-color: #ffb3cb; color: #c2457a; }
+        .steps button.on { border-color: #ff6f9f; color: #c2457a; }
+        .lead { margin: 14px 0 4px; font-size: 14.5px; }
+        .nav { display: flex; gap: 10px; margin-top: 8px; }
+        .nav .btn { flex: 1; }
+        .explain { margin: 14px 0 10px; padding: 12px 14px; border-radius: 14px; background: #fff4f8; font-size: 14px; }
+        .explain p { margin: 6px 0 0; }
+        .note { position: relative; margin-top: 10px; }
+        .note b { display: block; margin-bottom: 4px; font-size: 13px; color: #c2457a; }
+        .note textarea { min-height: 64px; padding-right: 38px; resize: none; overflow: hidden; }
+        .note .x { position: absolute; top: 24px; right: 6px; width: 28px; height: 28px; border: 0; border-radius: 50%; background: #fbe6ee; color: #c2457a; font-weight: 700; cursor: pointer; }
+                [hidden] { display: none !important; }
     </style>
 </head>
 
 <body>
     <main>
-        <img src="/img/logo.png" alt="" style="width:150px;margin:-10px 0 4px">
-        <h1>Khu vườn nhỏ</h1>
-        <p>Mỗi khu vườn ở đây dành riêng cho hai người, và chỉ mở bằng đường dẫn được gửi tặng.</p>
-        <p>Nếu bạn nhận được một đường dẫn, hãy mở đúng đường dẫn đó nhé.</p>
-        <p id="back" hidden><a class="btn" href="#"></a></p>
-        <p><a href="/play">Thử trồng hoa một mình →</a></p>
+        <section class="card hero" id="home">
+            <img src="/img/logo.png" alt="" style="width:150px;margin:-10px 0 4px">
+            <h1>Khu vườn nhỏ</h1>
+            <p>Một khu vườn dành riêng cho hai người, cùng chăm từ xa. Khi hoa nở rộ, lời cảm ơn (hoặc lời tỏ tình) của bạn sẽ hiện lên giữa trời.</p>
+            <p id="gone" hidden style="padding:10px 12px;border-radius:14px;background:#fff4e5;color:#8a5a00">🍂 Khu vườn bạn vừa mở đã được dọn đi vì <span id="idleH">48</span> giờ không ai ghé chăm. Bạn có thể tạo một khu vườn mới nhé.</p>
+            <p id="back" hidden><a class="btn" href="#"></a></p>
+            <p><button class="btn" id="newBtn">🌱 Tạo khu vườn mới</button></p>
+            <p><a href="/play">Thử trồng hoa một mình →</a></p>
+            <div id="mineBox" hidden>
+                <h3>Khu vườn bạn đã tạo trên máy này</h3>
+                <ul class="mine" id="mine"></ul>
+            </div>
+        </section>
+
+        <form class="card" id="form" hidden autocomplete="off" novalidate>
+            <h2 id="formTitle">Tạo khu vườn</h2>
+            <div class="steps" id="steps"></div>
+
+            <!-- 1. hai người -->
+            <section class="step" data-title="Hai người">
+                <p class="lead">Khu vườn này dành cho hai người. Bạn là người tạo vườn và viết lời nhắn; người ấy sẽ nhận một đường dẫn riêng để cùng chăm.</p>
+                <label for="sender">Tên bạn</label><input type="text" id="sender" maxlength="30" placeholder="Tên bạn">
+                <label for="receiver">Tên người ấy</label><input type="text" id="receiver" maxlength="30" placeholder="Tên người ấy">
+                <small>Tên hiện trong vườn và trong lời nhắn. Gọi thân mật cũng được, ví dụ "Mẹ", "Bé Na".</small>
+            </section>
+
+            <!-- 2. dịp -->
+            <section class="step" data-title="Dịp gì">
+                <p class="lead">Chọn một dịp — mình sẽ viết sẵn lời nhắn và các lá thư, bạn chỉ cần sửa cho đúng giọng mình.</p>
+                <div class="tpl" id="tpl"></div>
+                <label>Cuối game, người ấy sẽ thấy</label>
+                <div class="mode">
+                    <label><input type="radio" name="mode" value="cam-on" checked>💐 Lời cảm ơn / lời chúc</label>
+                    <label><input type="radio" name="mode" value="to-tinh">💗 Lời tỏ tình + câu hỏi</label>
+                </div>
+            </section>
+
+            <!-- 3. lời nhắn -->
+            <section class="step" data-title="Lời nhắn">
+                <p class="lead">Khi hai người chăm vườn đủ lâu, hoa sẽ bay lên trời, xếp thành chữ, rồi lời nhắn này hiện ra. Đây là món quà cuối cùng.</p>
+                <label for="flowerText">Chữ xếp bằng hoa trên trời</label>
+                <input type="text" id="flowerText" maxlength="24" placeholder="(mặc định: tên người ấy)">
+                <small>Ngắn thôi cho đẹp, khoảng 1–3 từ.</small>
+                <label for="message">Lời nhắn</label>
+                <textarea id="message" maxlength="1200" rows="8" placeholder="Viết vài dòng ngắn, xuống dòng như thơ…"></textarea>
+                <small>Xuống dòng để ngắt câu. Tối đa 1200 ký tự.</small>
+                <label for="signature">Chữ ký</label>
+                <input type="text" id="signature" maxlength="40" placeholder="(mặc định: tên bạn)">
+                <div id="qBox" hidden>
+                    <label for="question">Câu hỏi cho người ấy</label>
+                    <input type="text" id="question" maxlength="120" placeholder="Làm người yêu mình nhé?">
+                    <small>Người ấy trả lời ngay sau lời nhắn; bạn thấy câu trả lời trong vườn của mình.</small>
+                </div>
+            </section>
+
+            <!-- 4. lá thư bí mật -->
+            <section class="step" data-title="Lá thư">
+                <div class="explain">
+                    <b>💌 Lá thư bí mật là gì?</b>
+                    <p>Là những lời nhỏ bạn viết sẵn cho <span class="nhanName">người ấy</span>. Trong lúc chơi, mỗi khi hai bạn <b>hái được một bông Song Tâm</b> 💞 — loài hoa chỉ lớn khi cả hai cùng ở trong vườn — hoặc lên cấp gắn kết, <b>một lá thư sẽ mở ra</b>, lần lượt theo thứ tự dưới đây.</p>
+                    <p><span class="nhanName">Người ấy</span> không đọc trước được. Nên viết khoảng 6–15 lá, mỗi lá một hai câu.</p>
+                </div>
+                <div id="noteList"></div>
+                <button type="button" class="btn ghost wide" id="addNote">＋ Thêm một lá thư</button>
+            </section>
+
+            <!-- 5. màu sắc -->
+            <section class="step" data-title="Màu sắc">
+                <p class="lead">Màu hoa, bầu trời và kiểu chữ của đoạn kết. Mẫu đã chọn sẵn — muốn thì đổi.</p>
+                <label for="palette">Màu hoa</label>
+                <select id="palette"></select>
+                <div class="sw" id="sw"></div>
+                <div class="custom" id="custom" hidden>
+                    <input type="color" value="#ffb3c6"><input type="color" value="#ffe5ec"><input type="color" value="#cdb4db"><input type="color" value="#ffffff">
+                    <small style="display:inline">nhuỵ</small><input type="color" id="center" value="#ffd166">
+                </div>
+                <label for="backdrop">Bầu trời</label>
+                <select id="backdrop"></select>
+                <div class="row">
+                    <div><label for="flowerFont">Kiểu chữ hoa</label><select id="flowerFont"></select></div>
+                    <div><label for="textFont">Kiểu chữ lời nhắn</label><select id="textFont"></select></div>
+                </div>
+                <details>
+                    <summary>Nâng cao</summary>
+                    <label class="check"><input type="checkbox" id="cheats"> Bật menu thử nghiệm (mã Konami ↑↑↓↓←→←→BA) — chỉ để tự thử, nhớ tắt trước khi gửi đường dẫn.</label>
+                </details>
+                <button type="button" class="btn ghost wide" id="previewBtn">👀 Xem thử đoạn kết</button>
+            </section>
+
+            <p class="err" id="err"></p>
+            <div class="nav">
+                <button type="button" class="btn ghost" id="prevBtn">‹ Quay lại</button>
+                <button type="submit" class="btn" id="nextBtn">Tiếp ›</button>
+            </div>
+        </form>
+
+        <section class="card" id="done" hidden>
+            <h2 id="doneTitle">Khu vườn đã sẵn sàng!</h2>
+            <p>Hai đường dẫn dưới đây là chìa khoá vào vườn — không có mật khẩu, nên đừng chia sẻ công khai.</p>
+            <p class="hint">⏳ Vườn sẽ tự dọn đi nếu <b>48 giờ</b> liền không ai vào chăm — nhớ ghé vườn thường xuyên nhé.</p>
+            <label>Gửi cho <span id="rName"></span></label>
+            <div class="link"><input type="text" id="rLink" readonly><button type="button" data-copy="rLink">Chép</button></div>
+            <label>Của bạn (<span id="sName"></span>) — giữ lại, dùng để vào vườn và sửa lời nhắn</label>
+            <div class="link"><input type="text" id="sLink" readonly><button type="button" data-copy="sLink">Chép</button></div>
+            <button type="button" class="btn ghost wide" id="shareBtn" hidden>📤 Chia sẻ đường dẫn cho người ấy</button>
+            <a class="btn wide" id="goBtn" href="#">🌷 Vào vườn của bạn</a>
+        </section>
     </main>
-    <script>
+
+    <script type="module">
+        import { PALETTES } from '/js/lib/palettes.js';
+        import { BACKDROPS } from '/js/lib/backdrops.js';
+        import { FLOWER_FONTS, TEXT_FONTS } from '/js/lib/fonts.js';
+        import { TEMPLATES, defaultTemplate, fillTemplate } from '/js/lib/templates.js';
+
+        const $ = id => document.getElementById(id);
+        const store = { get: k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } } };
+        const MINE = 'vuon-hoa-mine', DRAFT = 'vuon-hoa-draft';
+        const params = new URLSearchParams(location.search), EDIT = params.get('sua');
+        if (params.has('het')) { $('gone').hidden = false; history.replaceState(null, '', '/'); localStorage.removeItem('vuon-hoa-last'); }
+        const link = slug => `${location.origin}/${slug}`;
+
         // đã từng vào một khu vườn bằng đường dẫn riêng trên máy này -> nút quay lại
-        try { const g = JSON.parse(localStorage.getItem('vuon-hoa-last')); if (g && g.slug) { const a = document.querySelector('#back a'); a.href = '/' + encodeURIComponent(g.slug); a.textContent = `🌷 Quay lại khu vườn của ${g.me} & ${g.partner}`; document.getElementById('back').hidden = false; } } catch { }
+        const last = store.get('vuon-hoa-last');
+        if (last?.slug) { const a = document.querySelector('#back a'); a.href = '/' + encodeURIComponent(last.slug); a.textContent = `🌷 Quay lại khu vườn của ${last.me} & ${last.partner}`; $('back').hidden = false; }
+        // vườn đã tạo trên máy này
+        function showMine() {
+            const mine = store.get(MINE) || [];
+            $('mineBox').hidden = !mine.length;
+            $('mine').replaceChildren(...mine.map(g => {
+                const li = document.createElement('li'), a = document.createElement('a'), e = document.createElement('a');
+                a.href = '/' + g.gui; a.textContent = `${g.sender} & ${g.receiver}`;
+                e.href = '/?sua=' + g.gui; e.textContent = '✏️ sửa · link';
+                li.append(a, e); return li;
+            }));
+        }
+        showMine();
+
+        // ---------- lựa chọn ----------
+        const opt = (sel, entries) => $(sel).replaceChildren(...entries.map(([v, t]) => Object.assign(document.createElement('option'), { value: v, textContent: t })));
+        opt('palette', [...Object.entries(PALETTES).map(([k, p]) => [k, p.name]), ['custom', 'Tự chọn màu…']]);
+        opt('backdrop', Object.entries(BACKDROPS));
+        opt('flowerFont', Object.entries(FLOWER_FONTS).map(([k, f]) => [k, f.label]));
+        opt('textFont', Object.entries(TEXT_FONTS).map(([k, f]) => [k, f.label]));
+        const customInputs = () => [...$('custom').querySelectorAll('input[type=color]:not(#center)')];
+        function swatch() {
+            const p = $('palette').value, custom = p === 'custom';
+            $('custom').hidden = !custom;
+            const cols = custom ? customInputs().map(i => [i.value, 1]) : PALETTES[p].colors;
+            $('sw').replaceChildren(...cols.map(([c, w]) => { const i = document.createElement('i'); i.style.background = c; i.style.flex = w; return i; }));
+        }
+        const mode = () => document.querySelector('input[name=mode]:checked').value;
+        function sync() {
+            $('qBox').hidden = mode() !== 'to-tinh';
+            $('flowerText').placeholder = $('receiver').value.trim() || '(mặc định: tên người ấy)';
+            $('signature').placeholder = $('sender').value.trim() || '(mặc định: tên bạn)';
+            for (const el of document.querySelectorAll('.nhanName')) el.textContent = $('receiver').value.trim() || 'người ấy';
+            swatch();
+        }
+
+        // ---------- lá thư bí mật: mỗi lá một ô ----------
+        const NOTE_MAX = 30;
+        const fit = t => { if (!t.offsetParent) return; t.style.height = 'auto'; t.style.height = t.scrollHeight + 2 + 'px'; }; // ô tự cao theo chữ
+        const noteBoxes = () => [...$('noteList').querySelectorAll('textarea')];
+        const notesList = () => noteBoxes().map(t => t.value.trim()).filter(Boolean);
+        const notesRaw = () => noteBoxes().map(t => t.value).join('\n');
+        function renumber() {
+            noteBoxes().forEach((t, k) => t.parentNode.querySelector('b').textContent = `Lá thư ${k + 1}`);
+            $('addNote').hidden = noteBoxes().length >= NOTE_MAX;
+        }
+        function addNote(text = '', focus = false) {
+            const d = document.createElement('div'), t = document.createElement('textarea'), x = document.createElement('button');
+            d.className = 'note'; t.maxLength = 300; t.rows = 2; t.value = text; t.placeholder = 'Một hai câu nhỏ…';
+            x.type = 'button'; x.className = 'x'; x.textContent = '✕'; x.title = 'Bỏ lá thư này';
+            x.onclick = () => { d.remove(); renumber(); changed(); };
+            t.addEventListener('input', () => fit(t));
+            d.append(document.createElement('b'), t, x); $('noteList').append(d); renumber(); fit(t);
+            if (focus) t.focus();
+        }
+        function setNotes(list) { $('noteList').replaceChildren(); for (const n of list) addNote(n); if (!list.length) addNote(); renumber(); }
+        $('addNote').onclick = () => { addNote('', true); changed(); };
+
+        // ---------- form <-> dữ liệu ----------
+        const FIELDS = ['sender', 'receiver', 'flowerText', 'message', 'signature', 'question', 'palette', 'backdrop', 'flowerFont', 'textFont'];
+        function read() {
+            const d = Object.fromEntries(FIELDS.map(k => [k, $(k).value.trim()]));
+            d.mode = mode(); d.notes = notesList(); d.cheats = $('cheats').checked;
+            d.signature ||= d.sender;
+            if (d.palette === 'custom') { d.customColors = customInputs().map(i => ({ rgb: i.value, weight: 1 })); d.center = $('center').value; }
+            return d;
+        }
+        function fill(d) {
+            for (const k of FIELDS) if (d[k] != null && $(k)) $(k).value = d[k];
+            if (d.signature === d.sender) $('signature').value = '';
+            if (d.flowerText === d.receiver) $('flowerText').value = '';
+            document.querySelector(`input[name=mode][value="${d.mode === 'to-tinh' ? 'to-tinh' : 'cam-on'}"]`).checked = true;
+            setNotes(d.notes || []);
+            $('cheats').checked = !!d.cheats;
+            if (d.customColors) customInputs().forEach((i, k) => { if (d.customColors[k]) i.value = d.customColors[k].rgb; });
+            if (d.center) $('center').value = d.center;
+            sync();
+        }
+
+        // ---------- mẫu gợi ý ----------
+        // tplOut: chữ mẫu vừa điền. Người dùng chưa sửa gì thì đổi tên sẽ tự điền lại tên mới vào mẫu.
+        let tplKey = null, tplOut = null;
+        const textNow = () => ({ flowerText: $('flowerText').value, message: $('message').value, question: $('question').value, notes: notesRaw() });
+        const untouched = () => !!tplOut && Object.entries(tplOut).every(([k, v]) => textNow()[k] === v);
+        const blank = () => !$('message').value.trim() && !notesList().length;
+        function markTpl() { for (const b of $('tpl').children) b.classList.toggle('on', b.dataset.k === (tplKey || '')); }
+        function tplText() { // điền chữ của mẫu đang chọn với tên hiện tại
+            const o = fillTemplate(TEMPLATES[tplKey], { gui: $('sender').value.trim(), nhan: $('receiver').value.trim() });
+            for (const k of ['flowerText', 'message', 'question']) $(k).value = o[k];
+            setNotes(o.notes.split('\n'));
+            tplOut = textNow(); sync();
+        }
+        function useTemplate(k, ask) {
+            if (ask && !blank() && !untouched() && !confirm('Thay lời nhắn và lá thư đang viết bằng mẫu này?')) return;
+            tplKey = k || null;
+            if (!k) { for (const f of ['flowerText', 'message', 'question']) $(f).value = ''; setNotes([]); tplOut = null; markTpl(); sync(); return; }
+            const t = TEMPLATES[k];
+            document.querySelector(`input[name=mode][value="${t.mode}"]`).checked = true;
+            for (const f of ['palette', 'backdrop', 'flowerFont', 'textFont']) $(f).value = t[f];
+            $('sender').placeholder = t.ph.sender; $('receiver').placeholder = t.ph.receiver;
+            markTpl(); tplText();
+        }
+        $('tpl').replaceChildren(...[...Object.entries(TEMPLATES).map(([k, t]) => [k, t.icon, t.label]), ['', '✍️', 'Tự viết']].map(([k, icon, label]) => {
+            const b = document.createElement('button'); b.type = 'button'; b.dataset.k = k;
+            b.append(Object.assign(document.createElement('i'), { textContent: icon }), label);
+            b.onclick = () => { useTemplate(k, true); if (!EDIT) saveDraft(); };
+            return b;
+        }));
+        const saveDraft = () => store.set(DRAFT, { ...read(), tpl: tplKey });
+
+        // ---------- các bước ----------
+        const STEPS = [...document.querySelectorAll('.step')], LAST = STEPS.length - 1;
+        let step = 0;
+        function stepError(k) { // kiểm tra trước khi sang bước sau
+            if (k === 0 && (!$('sender').value.trim() || !$('receiver').value.trim())) return 'Điền tên của hai người nhé 🌷';
+            if (k === 2 && !$('message').value.trim()) return 'Hãy viết lời nhắn cho đoạn kết';
+            return '';
+        }
+        function go(k) { // bước trước còn thiếu thì dừng ở bước đó và báo lỗi
+            let er = '';
+            for (let j = 0; j < k; j++) { er = stepError(j); if (er) { k = j; break; } }
+            step = Math.max(0, Math.min(LAST, k)); $('err').textContent = er; showStep(); scrollTo(0, 0);
+        }
+        function showStep() {
+            STEPS.forEach((s, j) => s.hidden = j !== step);
+            for (const t of STEPS[step].querySelectorAll('textarea')) fit(t);
+            [...$('steps').children].forEach((b, j) => { b.className = j === step ? 'on' : j < step ? 'done' : ''; });
+            $('prevBtn').textContent = step ? '‹ Quay lại' : '‹ Về trang chủ';
+            $('nextBtn').textContent = step < LAST ? 'Tiếp ›' : EDIT ? '💾 Lưu thay đổi' : '🌸 Tạo khu vườn';
+        }
+        $('steps').replaceChildren(...STEPS.map((s, j) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = `${j + 1}. ${s.dataset.title}`; b.onclick = () => go(j); return b; }));
+        $('prevBtn').onclick = () => step ? go(step - 1) : showHome();
+
+        function showForm() { $('home').hidden = $('done').hidden = true; $('form').hidden = false; step = 0; showStep(); scrollTo(0, 0); }
+        function showHome() { $('form').hidden = $('done').hidden = true; $('home').hidden = false; if (EDIT) history.replaceState(null, '', '/'); }
+        $('newBtn').onclick = () => {
+            const d = store.get(DRAFT);
+            if (d?.message) { fill(d); tplKey = d.tpl || null; tplOut = null; markTpl(); } // tiếp tục bản nháp
+            else { setNotes([]); useTemplate(defaultTemplate()); }
+            showForm();
+        };
+        function changed() { sync(); if (!EDIT) saveDraft(); }
+        $('form').addEventListener('input', e => {
+            if ((e.target.id === 'sender' || e.target.id === 'receiver') && tplKey && untouched()) tplText(); // tên đổi -> mẫu đổi theo
+            changed();
+        });
+        $('form').addEventListener('change', sync);
+
+        // xem thử đoạn kết: /play?thu đọc bản nháp này
+        $('previewBtn').onclick = () => {
+            const d = read();
+            if (!d.message) return $('err').textContent = 'Hãy viết lời nhắn trước đã 🌷';
+            const card = { mode: d.mode, flowerText: d.flowerText || d.receiver || 'Cảm ơn', message: d.message, signature: d.signature, question: d.question, palette: d.palette, customColors: d.customColors, center: d.center, backdrop: d.backdrop, flowerFont: d.flowerFont, textFont: d.textFont, seed: 7 };
+            store.set('vuon-hoa-preview', { card, notes: d.notes, me: d.receiver || 'Bạn', partner: d.sender || 'Người ấy' });
+            open('/play?thu', '_blank');
+        };
+
+        $('form').onsubmit = async e => {
+            e.preventDefault();
+            if (step < LAST) return go(step + 1); // Enter / nút Tiếp: sang bước sau
+            $('err').textContent = '';
+            const d = read();
+            for (const k of [0, 2]) if (stepError(k)) return go(k);
+            $('nextBtn').disabled = true;
+            try {
+                const r = await fetch(EDIT ? '/api/garden/' + encodeURIComponent(EDIT) : '/api/garden', { method: EDIT ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
+                const j = await r.json();
+                if (!r.ok) throw new Error(j.error || 'Có lỗi, thử lại nhé');
+                const mine = (store.get(MINE) || []).filter(g => g.gui !== j.gui);
+                store.set(MINE, [{ gui: j.gui, nhan: j.nhan, sender: d.sender, receiver: d.receiver }, ...mine].slice(0, 20));
+                if (!EDIT) localStorage.removeItem(DRAFT);
+                showDone(j, d, !!EDIT);
+            } catch (er) { $('err').textContent = er.message; }
+            finally { $('nextBtn').disabled = false; }
+        };
+
+        function showDone(j, d, edited) {
+            $('doneTitle').textContent = edited ? 'Đã lưu thay đổi 🌸' : 'Khu vườn đã sẵn sàng!';
+            $('rName').textContent = d.receiver; $('sName').textContent = d.sender;
+            $('rLink').value = link(j.nhan); $('sLink').value = link(j.gui);
+            $('goBtn').href = '/' + j.gui;
+            $('shareBtn').hidden = !navigator.share;
+            $('shareBtn').onclick = () => navigator.share({ title: 'Khu vườn của hai người 🌸', text: `${d.sender} mời ${d.receiver} cùng chăm một khu vườn nhỏ 🌷`, url: link(j.nhan) }).catch(() => { });
+            $('form').hidden = $('home').hidden = true; $('done').hidden = false; scrollTo(0, 0);
+            showMine();
+        }
+        document.addEventListener('click', e => {
+            const b = e.target.closest('[data-copy]'); if (!b) return;
+            const inp = $(b.dataset.copy); inp.select();
+            (navigator.clipboard?.writeText(inp.value) || Promise.reject()).catch(() => document.execCommand('copy'));
+            b.textContent = 'Đã chép ✓'; setTimeout(() => b.textContent = 'Chép', 1500);
+        });
+
+        // ?sua=<đường dẫn của người tạo>: mở form sửa
+        if (EDIT) {
+            $('formTitle').textContent = 'Sửa khu vườn';
+            fetch('/api/garden/' + encodeURIComponent(EDIT)).then(async r => {
+                const j = await r.json();
+                if (r.status === 410) { store.set(MINE, (store.get(MINE) || []).filter(g => g.gui !== EDIT)); showMine(); } // vườn đã bị dọn
+                if (!r.ok) throw new Error(j.error || 'Không mở được khu vườn này');
+                fill(j); showForm();
+                const p = document.createElement('p'), a = document.createElement('a'); p.className = 'hint'; p.style.textAlign = 'center';
+                a.href = '/' + j.slugs.nhan; a.textContent = link(j.slugs.nhan);
+                p.append(`Đường dẫn cho ${j.receiver}: `, a, document.createElement('br'), 'Thay đổi hiện ra khi hai người mở lại game.');
+                $('steps').after(p);
+            }).catch(er => { showHome(); alert(er.message); });
+        }
+        sync();
+        if (params.has('tao') && !EDIT) { history.replaceState(null, '', '/'); $('newBtn').click(); } // /?tao: mở thẳng form tạo vườn
     </script>
 </body>
 

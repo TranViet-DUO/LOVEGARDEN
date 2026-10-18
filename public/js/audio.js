@@ -111,7 +111,7 @@ export function scene({ weather, night: isNightNow, wind }) {
     if (!ctx) return;
     const t = ctx.currentTime, set = (k, v) => amb3[k].g.gain.setTargetAtTime(v, t, 0.8);
     set('rain', weather === 'storm' ? 0.5 : weather === 'rain' ? 0.28 : 0);
-    set('wind', Math.min(0.25, 0.04 + wind * 0.25) * (weather === 'wind' || weather === 'storm' ? 1.8 : 1));
+    set('wind', Math.min(0.25, 0.04 + wind * 0.25) * (weather === 'wind' || weather === 'storm' ? 1.8 : weather === 'snow' ? 1.4 : 1));
     amb3.wind.f.frequency.setTargetAtTime(400 + wind * 600, t, 0.5);
     set('night', 0);
     if (night && performance.now() - crick > 900 && Math.random() < 0.5) { // dế kêu

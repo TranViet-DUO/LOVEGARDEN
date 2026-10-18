@@ -7,9 +7,10 @@ import { buildFlowerText, drawFlower, drawLeaf } from './lib/flower-text.js';
 import { FLOWER_FONTS, TEXT_FONTS, SIGN_FONT, FONT_FILES, fontAt } from './lib/fonts.js';
 import { hash, clamp, lerp, lerp3 } from './lib/math.js';
 import { put, disc, drawHeart } from './lib/draw.js';
-import { advance, other, weatherAt, starAt, isNight, canFinale, bookCount, SPECIES, SPECIES_ORDER, SHOP, ACTS, AUTO, EVENTS, WISHES, xpFor, levelGift, hybridName, FULL_BLOOM, QUEST_LIFE, bloomNow, bloomQuest, BOOK_GOAL, COLS, ROWS, DAY, DIG_TAPS, HILL_MAX, MAX_PLOTS, LEAVE_GRACE, WEATHER, WEATHER_LEN, plotPrice, canExpand, ownedPlots, cdLeft, has } from './rules.js';
+import { advance, other, weatherAt, starAt, isNight, canFinale, bookCount, SPECIES, SPECIES_ORDER, SHOP, ACTS, AUTO, EVENTS, WISHES, xpFor, levelGift, hybridName, FULL_BLOOM, QUEST_LIFE, bloomNow, bloomQuest, BOOK_GOAL, COLS, ROWS, DAY, DIG_TAPS, HILL_MAX, MAX_PLOTS, LEAVE_GRACE, WEATHER, WEATHER_LEN, plotPrice, canExpand, ownedPlots, cdLeft, has,
+    seasonAt, inSeason, SEASONS, SEASON_ORDER, SEASON_GOAL, SEASON_DAYS, memStage, memGift, MEM_MARKS, vnDay, capTo, CAP_MAX } from './rules.js';
 import { connectGarden, localGarden } from './net.js';
-import { drawBed, drawPlant, drawStatus, drawSky, drawRain, nightTint, drawEvent, drawStar, drawLights, drawWeatherFx, skyColors, spColor } from './art.js';
+import { drawBed, drawPlant, drawStatus, drawSky, drawRain, drawSeason, nightTint, drawEvent, drawStar, drawLights, drawWeatherFx, skyColors, spColor } from './art.js';
 import { drawYard, drawCritters } from './yard.js';
 import { createRadio } from './radio.js';
 import { toast, openSheet, refreshSheet, closeSheet, sheetOpen, showLetter, ICON } from './ui.js';
@@ -38,13 +39,15 @@ const slug = decodeURIComponent(location.pathname.split('/').filter(Boolean)[0] 
 let info = null;
 if (slug && slug !== 'play') try { const r = await fetch('/api/card/' + encodeURIComponent(slug)); if (r.ok) info = await r.json(); } catch { }
 const SOLO = !info;
+// ?thu: xem thử đoạn kết với lời nhắn đang soạn ở trang chủ (trang chủ để sẵn trong localStorage `vuon-hoa-preview`)
+const PREVIEW = SOLO && params.has('thu') ? store.get('vuon-hoa-preview') : null;
 if (info) try { localStorage.setItem('vuon-hoa-last', JSON.stringify({ slug, me: info.me, partner: info.partner, title: info.title })); } catch { }
 const card = {
     mode: 'cam-on', flowerText: 'Cảm ơn bạn', message: 'Cảm ơn bạn đã ghé khu vườn nhỏ này\nvà gieo xuống đây một chút dịu dàng.', signature: '',
-    palette: 'hong-phan', backdrop: 'sunset', flowerFont: 'script', textFont: 'lora', textColor: 'auto', seed: 7, ...(info?.card || {})
+    palette: 'hong-phan', backdrop: 'sunset', flowerFont: 'script', textFont: 'lora', textColor: 'auto', seed: 7, ...(info?.card || PREVIEW?.card || {})
 };
-const DEMO_NOTES = ['Mỗi bông hoa ở đây là một lời cảm ơn nhỏ.', 'Cảm ơn bạn đã kiên nhẫn chăm khu vườn này.', 'Chúc bạn luôn có hoa — trong tay và trong lòng.'];
-const ME = info?.role || 'nhan', THEM = other(ME), NAME = { [ME]: info?.me || 'Bạn', [THEM]: info?.partner || 'Người ấy' };
+const DEMO_NOTES = PREVIEW?.notes?.length ? PREVIEW.notes : ['Mỗi bông hoa ở đây là một lời cảm ơn nhỏ.', 'Cảm ơn bạn đã kiên nhẫn chăm khu vườn này.', 'Chúc bạn luôn có hoa — trong tay và trong lòng.'];
+const ME = info?.role || 'nhan', THEM = other(ME), NAME = { [ME]: info?.me || PREVIEW?.me || 'Bạn', [THEM]: info?.partner || PREVIEW?.partner || 'Người ấy' };
 const ROLE_COL = { nhan: [255, 122, 168], gui: [96, 176, 255] }, css = c => `rgb(${c.join(',')})`;
 const who = r => (r === ME ? 'Bạn' : NAME[THEM]);
 const SPN = sp => SPECIES[sp]?.name || '';
@@ -86,17 +89,26 @@ function layout() {
     });
     L = { BW, BH, skyH, hillTop, bandY: skyH - bandH, bandH, yardH, H0: y1, k, plots, x0, gw };
     hillKey = null; ensureHill();
-    GB = new Uint8ClampedArray(BW * BH * 4); // mặt cỏ của vườn vẽ sẵn
-    for (let y = skyH; y < BH; y++) for (let x = 0; x < BW; x++) {
-        const o = (y * BW + x) * 4;
-        let c = lerp3([118, 190, 96], [78, 146, 66], (y - skyH) / (BH - skyH));
-        const n = hash(x * 3.7 + y * 11.3); if (n > 0.88) c = lerp3(c, [160, 210, 110], 0.5); else if (n < 0.08) c = lerp3(c, [50, 110, 50], 0.3);
-        GB[o] = c[0]; GB[o + 1] = c[1]; GB[o + 2] = c[2]; GB[o + 3] = 255;
-    }
+    GB = new Uint8ClampedArray(BW * BH * 4); gbKey = null; buildGrass(null);
     back = createBackdrop(card.backdrop, { BW, BH, seed: +card.seed || 1 }); GAP = Math.round(BH * 0.7); TRAVEL = GAP + BH;
     BK = new Uint8ClampedArray(BW * (BH + GAP) * 4); bakeRow = 0;
     if (fin) buildFinale(fin.liftT);
 }
+// mặt cỏ của vườn vẽ sẵn; sau Lễ hội đổi màu theo mùa: [trên, dưới, đốm sáng, đốm tối]
+const GRASS = { base: [[118, 190, 96], [78, 146, 66], [160, 210, 110], [50, 110, 50]], ha: [[130, 188, 84], [88, 142, 56], [176, 210, 100], [60, 108, 44]],
+    thu: [[190, 170, 92], [146, 122, 64], [226, 176, 90], [120, 90, 50]], dong: [[228, 236, 244], [196, 208, 224], [255, 255, 255], [170, 186, 206]] };
+let gbKey = null;
+function buildGrass(season) {
+    const key = GRASS[season] ? season : 'base'; if (key === gbKey) return; gbKey = key;
+    const [c0, c1, hi, lo] = GRASS[key], { skyH } = L;
+    for (let y = skyH; y < BH; y++) for (let x = 0; x < BW; x++) {
+        const o = (y * BW + x) * 4;
+        let c = lerp3(c0, c1, (y - skyH) / (BH - skyH));
+        const n = hash(x * 3.7 + y * 11.3); if (n > 0.88) c = lerp3(c, hi, 0.5); else if (n < 0.08) c = lerp3(c, lo, 0.3);
+        GB[o] = c[0]; GB[o + 1] = c[1]; GB[o + 2] = c[2]; GB[o + 3] = 255;
+    }
+}
+const HILL_TINT = { xuan: { c: [170, 230, 140], g: 0.12, f: 0 }, thu: { c: [214, 150, 70], g: 0.4, f: 0.15 }, dong: { c: [238, 242, 250], g: 0.65, f: 0.3 } };
 function bakeRows(n) { // trời của đoạn kết vẽ dần từng hàng để không bị giật
     const c = [0, 0, 0];
     for (let k = 0; k < n && bakeRow < BH + GAP; k++, bakeRow++) for (let x = 0; x < BW; x++) { back.sky(x, bakeRow, 0, c); const o = (bakeRow * BW + x) * 4; BK[o] = c[0]; BK[o + 1] = c[1]; BK[o + 2] = c[2]; BK[o + 3] = 255; }
@@ -108,16 +120,18 @@ const gView = () => st.gt + st.acc;
 let starPos = null, decorHits = [], evHit = null, links = [];
 const itemReady = k => { if (k === 'radio') return !!st && !st.radio?.q?.length && !st.radio?.list && tourDone(); if (!st || !ACTS[k] || !has(st, k)) return k === 'giay' && st?.decor.giay && unreadMail(); const gt = gView(); return cdLeft(st, k, gt) <= 0 && (!ACTS[k].night || isNight(gt)) && (k !== 'thung' || st.inv.compost >= 3); };
 function drawGarden(oy, extraLean = 0, headless = null) {
-    const C = { d, BW, H: BH1, t, oy }, gt = gView(), weather = weatherAt(st, gt);
+    const C = { d, BW, H: BH1, t, oy }, gt = gView(), weather = weatherAt(st, gt), season = fin ? null : seasonAt(st, gt)?.k || null;
     pt0 = PERF ? now_() : 0;
+    buildGrass(season);
     const sky = drawSky(C, L.skyH, gt, weather, st.decor, st.seed); pm('sky');
     const dark = sky.night ? 0.55 : sky.tod > 0.6 ? 1 - (sky.tod - 0.6) / 0.067 * 0.3 : 1, lean = clamp(wind.x * 0.25, -0.5, 0.5) + extraLean + (weather === 'wind' ? 0.15 : 0);
-    drawHill({ ...C, oy: oy + L.hillTop }, HILL, st.hill || '', lean, dark, fin && (c => t >= fin.hillTd(c))); pm('hill'); // đồi hoa phía sau hàng rào
+    drawHill({ ...C, oy: oy + L.hillTop }, HILL, st.hill || '', lean, dark, fin && (c => t >= fin.hillTd(c)), HILL_TINT[season]); pm('hill'); // đồi hoa phía sau hàng rào
     for (let y = L.skyH; y < BH; y++) { const j = y + oy; if (j >= 0 && j < BH1) d.set(GB.subarray(y * BW * 4, (y + 1) * BW * 4), j * BW * 4); }
     const star = starAt(st, gt);
     if (star) { const x = star.dir > 0 ? BW * (0.12 + 0.76 * star.f) : BW * (0.88 - 0.76 * star.f), y = L.hillTop * (0.35 + star.y * 2) + star.f * L.hillTop * 0.35; drawStar(C, x, y, star.dir, star.f, sc); starPos = { x, y }; } else starPos = null;
     const both = online.includes('gui') && online.includes('nhan');
-    decorHits = drawYard(C, L, st, { ready: itemReady, mail: unreadMail(), music: radio.playing, night: sky.night, dark }); pm('decor');
+    const mem = st.done && !fin ? { days: st.mem?.days || 0, streak: st.mem?.streak || 0, stage: memStage(st.mem?.days || 0) } : null;
+    decorHits = drawYard(C, L, st, { ready: itemReady, mail: unreadMail(), music: radio.playing, night: sky.night, dark, season, mem }); pm('decor');
     heads = [];
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
         const i = r * COLS + c, b = L.plots[i], Pt = st.plots[i];
@@ -134,6 +148,7 @@ function drawGarden(oy, extraLean = 0, headless = null) {
     if (!headless) drawCritters(C, L, { night: sky.night, dark, blooms: heads.filter(h => h && h.P.bloom && !h.P.faded) }); // chim, sóc, thỏ, bướm, ong, cú
     for (const p of P) drawParticle(C, p);
     if (weather === 'rain' || weather === 'storm') drawRain(C, t, weather === 'storm');
+    if (season) drawSeason(C, season, t, weather === 'snow');
     pm('fx1'); nightTint(C, L.skyH + oy, dark); pm('tint');
     if (sky.night) drawLights(C, L, st, heads, t);
     if (sky.night && st.done && !fin) drawSkyLanterns(C, L.H0); // sau Lễ hội: mỗi đêm đèn trời bay lên từ vườn
@@ -301,9 +316,25 @@ function leaveFinale() {
     if (st.done && store.get(AFTER_KEY) !== st.round) { // lần đầu về lại vườn sau lễ hội: vườn vẫn còn nhiều điều để làm
         store.set(AFTER_KEY, st.round);
         showLetter('Hành trình tiếp theo 🌱', 'Lễ hội đã qua, nhưng khu vườn của hai bạn vẫn tiếp tục nở hoa:\n'
-            + '🌠 Mỗi bình minh có điều ước mới — làm xong, đồi hoa nở thêm 25 bông\n✨ Săn hoa lấp lánh (1 trên 20 hạt) cho bộ sưu tập\n'
-            + '💞 Gắn kết không còn giới hạn cấp, mỗi cấp một món quà\n⛰️ Phủ kín 100% ngọn đồi\n🏮 Đêm nào cũng có đèn trời bay lên\n📸 Gửi bưu thiếp khu vườn cho nhau (trong Sổ tay)');
+            + `🌸 Bốn mùa: xuân, hạ, thu, đông nối nhau (mỗi mùa ${SEASON_DAYS} ngày vườn) — mỗi mùa có hoa riêng, hái đủ ${SEASON_GOAL} bông để mở Lễ hội của mùa\n`
+            + `🌳 Cây kỷ niệm trên đồi: mỗi ngày ${SOLO || !st.joined[THEM] ? 'bạn ghé' : 'cả hai cùng ghé'} vườn, cây lớn thêm và treo một dải ruy băng\n`
+            + '⏳ Thư hẹn giờ (trong 💌): viết hôm nay, hẹn ngày mới được mở\n'
+            + '🌠 Điều ước mỗi bình minh làm đồi nở thêm · ✨ săn hoa lấp lánh · 💞 gắn kết không giới hạn cấp\n🏮 Đêm nào cũng có đèn trời · 📸 bưu thiếp trong Sổ tay');
     }
+    for (const l of laterLetters.splice(0)) showLetter(...l); // thư đến trong lúc chiếu đoạn kết
+}
+// lá thư sau Lễ hội (cây kỷ niệm, lễ hội mùa, thư hẹn giờ): đang chiếu đoạn kết thì để dành tới lúc về lại vườn
+const finShowing = () => !!fin || !!(st?.liftAt && st.liftAt !== seenLift); // đang chiếu, hoặc sắp chiếu (fx đến trước khi dựng đoạn kết)
+const laterLetters = [], letterLater = (from, text) => finShowing() ? laterLetters.push([from, text]) : showLetter(from, text);
+
+// lá thư bí mật (viết sẵn khi tạo vườn): ghi rõ vì sao mở ra và ai viết cho ai
+const noteWhy = {}, NOTE_WHY = { songtam: 'mở ra từ một bông Song Tâm 💞', level: 'quà lên cấp gắn kết', bloom: 'quà vườn nở rộ' };
+function noteLetter(n) {
+    const total = info?.notesTotal ?? DEMO_NOTES.length, text = notesText[n - 1], why = NOTE_WHY[noteWhy[n]];
+    const head = `💌 Lá thư bí mật ${n}/${total}${why ? ' · ' + why : ''}`;
+    if (SOLO) return [head, text];
+    if (ME === 'gui') return [head, `Lá thư bạn viết sẵn cho ${NAME[THEM]} vừa được mở:\n\n${text}`];
+    return [head, `${text}\n\n— ${info.sender}`];
 }
 
 // ---------- tin từ khu vườn chung ----------
@@ -314,13 +345,14 @@ function onMessage(m) {
     if (m.type === 'cur') return showPartner(m.x, m.y);
     if (m.type !== 'state') return;
     srvOff = m.now - Date.now(); st = m.st; online = m.online || [ME]; notesText = m.notes || []; ensureHill();
-    if (firstState) { firstState = false; if (RESET && rctx().cheats && !SOLO) net.send({ type: 'restart' }); showAway(); }
+    if (m.ending) Object.assign(card, m.ending); // lời nhắn đoạn kết: máy chủ chỉ gửi khi Lễ hội hoa bắt đầu
+    if (firstState) { firstState = false; if (RESET && rctx().cheats && !SOLO) net.send({ type: 'restart' }); if (PREVIEW) setTimeout(() => buildFinale(t), 900); else showAway(); }
     for (const f of m.fx || []) onFx(f);
     if (knownNotes === null) knownNotes = notesText.length;
-    while (knownNotes < notesText.length) { showLetter(`Lá thư số ${knownNotes + 1}${SOLO ? '' : ` · từ ${info.sender}`}`, notesText[knownNotes]); audio.sfx('letter'); knownNotes++; }
+    while (knownNotes < notesText.length) { letterLater(...noteLetter(knownNotes + 1)); audio.sfx('letter'); knownNotes++; }
     if (st.liftAt && st.liftAt !== seenLift && !fin) buildFinale(t - Math.min(sinceServer(st.liftAt), 0.5)); // lần đầu thấy đoạn kết: chiếu từ đầu
     radio.update(st.radio || null);
-    showAnswer(); hud(); checkQuest();
+    showAnswer(); hud(); checkQuest(); checkCaps();
     if (sheetOpen()) refreshOpenSheet();
 }
 // hiệu ứng / thông báo cho từng sự kiện (từ máy chủ, hoặc do máy mình tự mô phỏng thời gian trôi)
@@ -337,7 +369,7 @@ function onFx(f) {
         case 'fert': audio.sfx('plant'); burst(x, y, 'spark', f.gold ? [255, 220, 90] : [150, 255, 150], 10); break;
         case 'bugged': audio.sfx('bug'); burst(x, y, 'spark', [255, 230, 120], 5); toast(`${who(f.role)} bắt được sâu +2 ✨`, 'good', 'bug' + f.i, 2000); break;
         case 'bugGone': toast(f.by === 'wind' ? '🍃 Gió nhẹ đã thổi bay một con sâu' : f.by === 'bird' ? '🐦 Chim sẻ vừa bắt giúp một con sâu' : '🌧️ Mưa to cuốn trôi một con sâu', 'good', 'bg' + f.by, 6000); break;
-        case 'harvest': audio.sfx('harvest'); burst(x, y, 'petal', spColor({ sp: f.sp, hue: 0 }), 10); if (f.shiny) burst(x, y, 'spark', [255, 240, 150], 14); toast(`${f.by === 'cun' ? '🐕 Cún hái giúp ' : mine ? '' : NAME[THEM] + ' hái '}+${f.dew} ✨ ${ICON[f.sp]} ${SPN(f.sp)}${f.perfect ? ' · Hoàn hảo ⭐' : ''}${f.shiny ? ' · Lấp lánh ✨×2,5' : ''}${f.hy ? ` · 💞 ${hybridName(f.hy)}` : ''}${f.rainbow ? ' · 🌈' : ''}${f.gift ? ` · +2 hạt ${SPN(f.gift)}` : ''}`, 'good', 'hv' + f.i + f.dew, 1500); break;
+        case 'harvest': audio.sfx('harvest'); burst(x, y, 'petal', spColor({ sp: f.sp, hue: 0 }), 10); if (f.shiny) burst(x, y, 'spark', [255, 240, 150], 14); toast(`${f.by === 'cun' ? '🐕 Cún hái giúp ' : mine ? '' : NAME[THEM] + ' hái '}+${f.dew} ✨ ${ICON[f.sp]} ${SPN(f.sp)}${f.perfect ? ' · Hoàn hảo ⭐' : ''}${f.shiny ? ' · Lấp lánh ✨×2,5' : ''}${f.hy ? ` · 💞 ${hybridName(f.hy)}` : ''}${f.rainbow ? ' · 🌈' : ''}${f.gift ? ` · +2 hạt ${SPN(f.gift)}` : ''}${f.season ? ` · ${SEASONS[st.sea?.k]?.icon || '🌸'} hoa mùa${st.sea && !st.sea.fest ? ` ${st.sea.have}/${SEASON_GOAL}` : ''}` : ''}`, 'good', 'hv' + f.i + f.dew, 1500); break;
         case 'buy': audio.sfx('coin'); if (mine && f.item === 'giay') toast('📝 Đã có giấy ghi chú! Chạm 💌 hoặc hòm thư trong vườn để viết', 'love', 'unl', 0); else if (mine && f.item === 'thung') toast('🧺 Đã có thùng ủ phân! Đủ 3 🍂 thì chạm thùng (hoặc nút 🍂) để ủ', 'good', 'unl', 0); else if (mine && SHOP[f.item]?.kind === 'decor' && ACTS[f.item]) toast(`${SHOP[f.item].icon} ${SHOP[f.item].name} đã đặt trong sân — chạm vào để ${ACTS[f.item].name.toLowerCase()}`, 'good', 'unl', 0); else if (f.got && mine) toast(`🎁 Túi hạt có: ${f.got.map(s => ICON[s] + ' ' + SPN(s)).join(', ')}`, 'good', 'got' + t, 0); else if (!mine) toast(`${NAME[THEM]} vừa mua ${f.item.startsWith('seed:') ? 'hạt ' + SPN(f.item.slice(5)) : SHOP[f.item]?.name}`, '', 'buy' + f.item, 3000); break;
         case 'star': audio.sfx('star'); toast(`🌠 ${who(f.role)} đã ước! ${f.gift === 'songtam' ? '+1 hạt Song Tâm 💞' : '+25 ✨'}`, 'love', 'star'); break;
         case 'level': audio.sfx('level'); toast(`💞 Gắn kết cấp ${f.lvl}! ${f.text}`, 'love', 'lv' + f.lvl, 60000); burst(BW / 2, BH * 0.6, 'heart', [255, 120, 160], 14, sc); break;
@@ -366,10 +398,115 @@ function onFx(f) {
         case 'die': audio.sfx('bad'); toast(`💀 ${SPN(f.sp)} đã chết khô… −2 💞`, 'bad', 'die' + f.i); break;
         case 'fade': toast(`🍂 ${SPN(f.sp)} sắp tàn — hái nhanh kẻo phí!`, 'bad', 'fd' + f.i); break;
         case 'hill': audio.sfx('level'); toast(`⛰️ Đồi hoa đã phủ ${f.pct}%!${f.pct >= 100 ? ' Kín cả ngọn đồi rồi 💐' : ''}`, 'love', 'hill' + f.pct, 600000); break;
+        case 'hillWind': if (HILL) { // vài cánh hoa trên đồi bay theo gió
+            const hn = hillCount(HILL, st.hill || ''), c = HILL.cands.find(c => c.rank === hn + Math.floor(Math.random() * 6)) || HILL.cands[Math.floor(Math.random() * HILL.cands.length)];
+            if (c) burst(c.x, c.y + L.hillTop, 'leaf', [255, 190, 210], Math.min(4, f.n), sc * 0.6);
+            if (f.w === 'gust') toast('🍃 Vuốt mạnh quá, gió cuốn bay vài bông hoa trên đồi…', 'sky', 'hwg', 45000);
+            else toast(`${WEATHER[f.w].icon} Gió cuốn bay vài bông hoa trên đồi…`, 'sky', 'hw' + Math.floor(gView() / WEATHER_LEN), 60000);
+            break;
+        }
+        case 'note': noteWhy[f.n] = f.by; break;
+        case 'noteAll': toast('💞 Hoa Song Tâm đã nở — mọi lá thư bí mật đều đã được mở rồi', 'love', 'noteall', 6000); break;
         case 'hillLoss': toast(`🥀 ${f.n} bông trên đồi héo theo…`, 'bad', 'hl', 4000); break;
         case 'quest': audio.sfx('level'); toast('🌸 Sự kiện ẩn hoàn thành! Lễ hội hoa đã sẵn sàng 🎆', 'love', 'quest', 600000); burst(BW / 2, BH * 0.7, 'heart', [255, 200, 120], 24, sc); break;
         case 'fullbloom': audio.sfx('level'); toast('🌸 VƯỜN NỞ RỘ! +50 ✨ +15 💞', 'love', 'full', 600000); burst(BW / 2, BH * 0.7, 'heart', [255, 150, 190], 20, sc); break;
+        // ---- sau Lễ hội ----
+        case 'season': { const S = SEASONS[f.s]; if (!f.first) { audio.sfx('star'); seasonShower(f.s, 30); } toast(`${S.icon} ${S.name} đã về — ${S.tip} Hoa của mùa: ${S.sp.map(x => ICON[x]).join(' ')} (hái được ×1,5 ✨)`, 'sky', 'sea' + f.s, 300000); break; }
+        case 'seasonfest': if (once('sf' + f.n)) { audio.sfx('level'); seasonShower(f.s, 90); letterLater(`${SEASONS[f.s].icon} Lễ hội ${SEASONS[f.s].name.toLowerCase()}`, SEASON_FEST[f.s] + `\n\n🎁 +80 ✨ · +10 💞 · hoa của mùa phủ thêm lên đồi · 2 hạt mỗi loài hoa của mùa sau`); } break;
+        case 'memday': if (once('md' + f.n)) {
+            audio.sfx('level'); const [mx, my] = memXY(); burst(mx, my, 'heart', [255, 130, 170], 10, sc * 0.8);
+            if (f.gift) letterLater(`🌳 Cây kỷ niệm · ngày thứ ${f.n}`, (MEM_TEXT[f.n] || `${f.n} ngày cùng nhau ghé vườn. Cây kỷ niệm vẫn đang lớn — cảm ơn hai bạn đã không quên nhau.`) + `\n\n🎁 Quà: ${f.gift}`);
+            else toast(`🌳 Ngày thứ ${f.n} cùng ghé vườn — cây kỷ niệm thêm một dải ruy băng 🎀${f.streak > 1 ? ` · ${f.streak} ngày liền 🔥` : ''}`, 'love', 'md' + f.n, 0);
+        } break;
+        case 'memseen': if (f.role === ME && st.joined[THEM]) toast(`🌳 Bạn đã ghé vườn hôm nay — khi ${NAME[THEM]} cũng ghé, cây kỷ niệm sẽ lớn thêm`, 'sky', 'memseen', 600000); else if (f.role === THEM) toast(`🌳 ${NAME[THEM]} đã ghé vườn hôm nay`, 'sky', 'memthem', 600000); break;
+        case 'capsule': audio.sfx('letter'); toast(mine ? `⏳ Đã niêm phong lá thư — sẽ mở sau ${f.days} ngày` : `⏳ ${NAME[THEM]} vừa gửi bạn một lá thư hẹn giờ — ${f.days} ngày nữa mới được mở 🔒`, 'love', 'cap' + f.days, 0); break;
+        case 'capread': if (!mine) toast(`📬 ${NAME[THEM]} đã mở lá thư hẹn giờ của bạn`, 'love', 'capr', 0); break;
     }
+}
+// ---- sau Lễ hội: thông báo một lần (cùng một fx có thể đến từ dự đoán và từ máy chủ) ----
+const onceSeen = new Set(), once = k => !onceSeen.has(k) && !!onceSeen.add(k);
+const SEASON_COL = { xuan: [[255, 190, 214], [255, 235, 242], [255, 150, 190]], ha: [[255, 214, 70], [255, 160, 60], [140, 220, 255]], thu: [[236, 150, 60], [214, 100, 50], [246, 196, 80]], dong: [[250, 252, 255], [220, 232, 250], [200, 220, 255]] };
+function seasonShower(k, n) { // cơn mưa cánh hoa / lá / tuyết khắp màn hình
+    for (let j = 0; j < n; j++) P.push({ kind: k === 'thu' ? 'leaf' : 'petal', x: Math.random() * BW, y: -Math.random() * BH * 0.5, vx: (Math.random() - 0.5) * 4 * sc, vy: (3 + Math.random() * 4) * sc, rot: Math.random() * 6, life: 0, max: 7, col: SEASON_COL[k][j % 3], sz: sc * (0.6 + Math.random() * 0.6) });
+}
+const SEASON_FEST = {
+    xuan: 'Cả một mùa xuân, hai bạn đã cùng nhau gieo, tưới và hái những bông hoa đầu mùa.\nMai vàng, tulip, cẩm chướng, hoa hồng — bông nào cũng có một chút của cả hai người.',
+    ha: 'Mùa hạ nắng gắt mà vườn vẫn xanh, vì có người nhớ tưới mỗi ngày.\nHướng dương vẫn quay về phía mặt trời — như hai bạn vẫn quay về phía nhau.',
+    thu: 'Lá vàng rơi, gió heo may thổi qua hàng rào.\nMùa thu này, dã quỳ và cúc nở đầy vườn — nhẹ nhàng, chậm rãi, như những buổi chiều hai bạn cùng ghé.',
+    dong: 'Tuyết phủ trắng ngọn đồi, nhưng trong vườn vẫn còn hoa.\nLan, quỳnh, oải hương, hoa ly — những bông hoa của mùa lạnh, nở lên vì có người kiên nhẫn chờ.'
+};
+const MEM_TEXT = {
+    1: 'Cây kỷ niệm đã bén rễ trên ngọn đồi.\nMỗi ngày hai bạn cùng ghé vườn — không cần cùng lúc, chỉ cần cùng một ngày — cây sẽ lớn thêm một chút và treo thêm một dải ruy băng.\nLỡ ngày cũng không sao, cây sẽ đợi.',
+    3: 'Ba ngày. Mầm nhỏ đã thành cây non, lá đầu tiên đã xoè ra.\nNhững điều nhỏ lặp lại mỗi ngày thường là những điều đáng giữ nhất.',
+    7: 'Tròn một tuần cùng nhau ghé vườn.\nCây đã cao hơn hàng rào một chút rồi đấy.',
+    14: 'Hai tuần. Cây kỷ niệm đã có tán lá riêng, đủ để che một góc đồi.\nCó những thói quen bắt đầu từ một khu vườn nhỏ.',
+    30: 'Một tháng!\nCây kỷ niệm đã nở hoa hồng. Ba mươi dải ruy băng, mỗi dải là một ngày hai bạn nhớ về nhau.',
+    50: 'Năm mươi ngày. Cây đã lớn, rễ đã sâu — như những điều được vun đắp đủ lâu.',
+    100: 'Một trăm ngày.\nCây kỷ niệm nở hoa vàng — loài hoa chỉ dành cho những khu vườn được chăm đủ trăm ngày.\nCảm ơn hai bạn vì đã ở đây, mỗi ngày.'
+};
+const memXY = () => [BW * 0.27, L.skyH - 10];
+const MEM_STAGE = ['Hạt mầm vừa nhú', 'Cây non', 'Cây con', 'Cây đang lớn', 'Cây tán rộng', 'Cây nở hoa hồng', 'Cây hoa vàng trăm ngày'];
+const dateVN = ms => { const d = new Date(ms + 7 * 3600e3); return `${d.getUTCDate()}/${d.getUTCMonth() + 1}/${d.getUTCFullYear()}`; };
+function memHTML() {
+    const M = st.mem || { days: 0, streak: 0, best: 0, seen: {}, last: -1 }, today = vnDay(serverNow()), duo = !SOLO && st.joined.gui && st.joined.nhan;
+    const next = MEM_MARKS.find(n => n > M.days) || (Math.floor(M.days / 50) + 1) * 50;
+    const status = M.last === today ? '✅ Hôm nay cây đã lớn thêm — hẹn ngày mai nhé' : duo ? `Hôm nay: bạn ${M.seen?.[ME] === today ? '✓ đã ghé' : 'chưa ghé'} · ${esc(NAME[THEM])} ${M.seen?.[THEM] === today ? '✓ đã ghé' : 'chưa ghé'}` : 'Ghé vườn mỗi ngày để cây lớn thêm';
+    return `<p class="empty" style="margin-top:0">Mỗi ngày (theo giờ Việt Nam) ${duo ? 'cả hai cùng ghé vườn — không cần cùng lúc' : 'bạn ghé vườn'}, cây kỷ niệm lớn thêm và treo thêm một dải ruy băng 🎀. Lỡ ngày cũng không sao, cây chỉ đợi.</p>`
+        + itemRow('🌳', `${M.days} ngày cùng ghé vườn`, `${MEM_STAGE[memStage(M.days)]}<br>${status}`, '')
+        + itemRow('🔥', `Chuỗi ${M.streak} ngày liền`, `Dài nhất: ${M.best} ngày · từ 3 ngày liền, tim bay quanh cây`, '')
+        + itemRow('🎁', `Mốc tiếp theo: ngày thứ ${next}`, memGift(next)?.text || '', '')
+        + `<div class="sec">Các mốc</div><div class="grid8" style="grid-template-columns:repeat(4,1fr)">${MEM_MARKS.map(n => `<div class="${M.days >= n ? '' : 'no'}"><i>${M.days >= n ? '🎀' : '🔒'}</i>${n} ngày</div>`).join('')}</div>`;
+}
+function openMemTree() { if (!st) return; audio.sfx('open'); openSheet('memtree', 'Cây kỷ niệm 🌳', memHTML(), onSheet); }
+function seasonHTML() { // Sổ tay: mùa hiện tại + nhật ký các mùa
+    const s = seasonAt(st, gView()); if (!s) return '';
+    const S = SEASONS[s.k], have = st.sea?.n === s.n ? st.sea.have : 0, fest = st.sea?.n === s.n && st.sea.fest;
+    const log = (st.seasons || []).slice(-8).reverse().map(x => `<div class="${x.fest ? '' : 'no'}"><i>${SEASONS[x.k].icon}</i>${SEASONS[x.k].name}<br><small>${x.fest ? 'Lễ hội ✓' : `${x.have}/${SEASON_GOAL}`}</small></div>`).join('');
+    return `<div class="sec">Bốn mùa ${S.icon}</div>`
+        + itemRow(S.icon, `${S.name} · ngày ${s.day + 1}/${SEASON_DAYS}`, `${S.tip}<br>Hoa của mùa (hái được ×1,5 ✨): ${S.sp.map(x => ICON[x] + ' ' + SPN(x)).join(', ')}<br>${fest ? '🎉 Đã mở Lễ hội của mùa này' : `Hái ${SEASON_GOAL} bông hoa mùa để mở Lễ hội ${S.name.toLowerCase()}: <b>${have}/${SEASON_GOAL}</b>`}<div class="wbar"><i style="width:${Math.min(100, have / SEASON_GOAL * 100)}%"></i></div>`, fest ? '✅' : '')
+        + (log ? `<div class="grid8" style="grid-template-columns:repeat(4,1fr)">${log}</div>` : '')
+        + `<button class="soft" data-act="memtree">🌳 Cây kỷ niệm · ${st.mem?.days || 0} ngày</button>`;
+}
+// thư hẹn giờ
+const capMine = c => capTo(st, c) === ME; // lá thư dành cho mình
+const capsArrived = () => (st?.caps || []).filter(c => capMine(c) && c.r !== ME && !c.read && c.tx && c.open <= serverNow());
+function checkCaps() { // tới ngày: thư tự bật lên (một lần)
+    if (!st || finShowing()) return;
+    for (const c of (st.caps || []).filter(c => capMine(c) && !c.read && c.tx && c.open <= serverNow())) {
+        if (!once('cap' + c.id)) continue;
+        audio.sfx('letter'); showLetter(`⏳ Thư hẹn giờ · ${c.r === ME ? 'bạn viết cho chính mình' : 'từ ' + NAME[c.r]}`, `${c.tx}\n\n— viết ngày ${dateVN(c.at)}`);
+        net.send({ type: 'capread', id: c.id });
+    }
+}
+setInterval(checkCaps, 20000);
+function capsHTML() {
+    const partner = SOLO || !st.joined[THEM] ? 'chính bạn trong tương lai' : esc(NAME[THEM]);
+    let h = '<div class="sec">⏳ Thư hẹn giờ</div>';
+    if (!st.done) return h + '<p class="empty">Mở ra sau Lễ hội hoa: viết một lá thư hôm nay, hẹn ngày nó mới được mở.</p>';
+    const now = serverNow(), caps = st.caps || [], left = c => Math.max(1, vnDay(c.open) - vnDay(now));
+    for (const c of caps.filter(c => c.r !== ME && capMine(c) && c.open > now)) h += `<div class="memo them"><p>🔒 Một lá thư từ ${esc(NAME[c.r])} đang chờ tới ngày <b>${dateVN(c.open)}</b> — còn ${left(c)} ngày nữa.</p></div>`;
+    const wait = caps.filter(c => c.r === ME && c.open > now);
+    for (const c of wait) h += memo(c, 'me', `Niêm phong ${dateVN(c.at)} · mở ngày ${dateVN(c.open)} (còn ${left(c)} ngày) 🔒`);
+    if (wait.length < CAP_MAX) {
+        const anniv = st.liftAt ? (() => { const d = new Date(st.liftAt + 7 * 3600e3), y = new Date(serverNow() + 7 * 3600e3).getUTCFullYear(); for (const yy of [y, y + 1]) { const n = vnDay(Date.UTC(yy, d.getUTCMonth(), d.getUTCDate()) - 7 * 3600e3) - vnDay(now); if (n >= 1) return n; } return 0; })() : 0;
+        h += `<form class="note-form" id="capForm"><textarea id="capIn" maxlength="600" rows="4" placeholder="Viết cho ${partner} một lá thư, hẹn một ngày mới được mở…"></textarea>
+            <select id="capDays"><option value="1">Mở vào ngày mai</option><option value="7">Một tuần nữa</option><option value="30" selected>Một tháng nữa</option><option value="100">100 ngày nữa</option>${anniv ? `<option value="${anniv}">Ngày kỷ niệm Lễ hội hoa (${anniv} ngày nữa)</option>` : ''}<option value="date">Chọn một ngày…</option></select>
+            <input type="date" id="capDate" hidden><button>Niêm phong ⏳</button></form>`;
+    } else h += `<p class="empty">Bạn đang có ${CAP_MAX} lá chờ mở — đợi một lá mở ra rồi viết tiếp nhé.</p>`;
+    const opened = caps.filter(c => c.open <= now && c.tx && (c.r === ME || capMine(c))).reverse();
+    if (opened.length) h += `<details class="old"><summary>Thư hẹn giờ đã mở (${opened.length})</summary>${opened.map(c => memo(c, c.r === ME ? 'me' : 'them', `${c.r === ME ? 'Bạn' : esc(NAME[c.r])} · viết ${dateVN(c.at)} · mở ${dateVN(c.open)}`)).join('')}</details>`;
+    return h;
+}
+function bindCaps() {
+    const f = $('capForm'); if (!f) return;
+    const sel = $('capDays'), dt = $('capDate');
+    sel.onchange = () => { dt.hidden = sel.value !== 'date'; if (!dt.hidden) { const d = new Date(serverNow() + 7 * 3600e3 + 86400e3); dt.min = d.toISOString().slice(0, 10); dt.focus(); } };
+    f.onsubmit = e => {
+        e.preventDefault(); const tx = $('capIn').value.trim(); if (!tx) return;
+        let days = +sel.value;
+        if (sel.value === 'date') { const ms = Date.parse(dt.value + 'T00:00:00+07:00'); days = vnDay(ms) - vnDay(serverNow()); if (!(days >= 1 && days <= 730)) return toast('Chọn một ngày từ ngày mai tới 2 năm sau nhé', 'bad', 'capd'); }
+        net.send({ type: 'capsule', tx, days }); $('capIn').value = '';
+    };
 }
 
 // công trình trong vườn vừa được dùng
@@ -456,8 +593,8 @@ function hud() {
     if (!$('tools').hidden) refreshTools();
     const unread = unreadMail() ? 1 : 0; $('chatBadge').hidden = !unread; $('chatBadge').textContent = unread;
     setHTML('chatName', st.decor.giay ? 'Lời nhắn' : 'Lời nhắn 🔒');
-    const icon = night && !['rain', 'storm', 'fog'].includes(w) ? '🌙' : WEATHER[w].icon;
-    setHTML('clock', `${icon} ${HHMM(gt)}<span class="w"> ${night ? 'Đêm' : WEATHER[w].name}</span> → ${WEATHER[wn].icon}`);
+    const icon = night && !['rain', 'storm', 'fog', 'snow'].includes(w) ? '🌙' : WEATHER[w].icon, sea = seasonAt(st, gt);
+    setHTML('clock', `${sea ? SEASONS[sea.k].icon + ' ' : ''}${icon} ${HHMM(gt)}<span class="w"> ${night ? 'Đêm' : WEATHER[w].name}</span> → ${WEATHER[wn].icon}`);
     $('clock').title = `${WEATHER[w].name}: ${WEATHER[w].tip}\nKhoảng ${left} phút nữa: ${WEATHER[wn].name}`;
     const x0 = xpFor(st.lvl), x1 = xpFor(st.lvl + 1); $('lvl').textContent = st.lvl; $('bondTx').textContent = `${Math.max(0, Math.floor(st.xp - x0))}/${x1 - x0}`;
     $('xpbar').style.width = `${clamp((st.xp - x0) / (x1 - x0), 0, 1) * 100}%`;
@@ -527,7 +664,7 @@ function bookHTML() {
     const nb = bookCount(st), book = SPECIES_ORDER.map(s => `<div class="${st.book[s] ? '' : 'no'}"><i>${ICON[s]}</i>${st.book[s] ? SPECIES[s].name : '???'}${st.book[s] ? `<br><small>nở ${st.book[s]} lần</small>` : ''}</div>`).join('');
     const nxt = `Cấp ${st.lvl + 1}: ${levelGift(st.lvl + 1).text} (${Math.floor(st.xp)}/${xpFor(st.lvl + 1)} 💞)`;
     const shinyN = Object.keys(st.shiny || {}).length, shinyGrid = SPECIES_ORDER.filter(x => SPECIES[x].price).map(x => `<div class="${st.shiny?.[x] ? 'shiny' : 'no'}"><i>${ICON[x]}</i>${st.shiny?.[x] ? SPECIES[x].name : '???'}</div>`).join('');
-    const notes = notesText.length ? notesText.map((n, i) => `<div class="note">💌 ${i + 1}. ${n.replace(/</g, '&lt;')}</div>`).join('') : '<p style="font-size:13px;color:#8d6b80">Chưa có lá thư nào. Hái hoa Song Tâm 💞, lên cấp gắn kết hoặc làm vườn nở rộ để mở thư.</p>';
+    const notes = notesText.length ? notesText.map((n, i) => `<div class="note">💌 ${i + 1}. ${n.replace(/</g, '&lt;')}</div>`).join('') : '<p style="font-size:13px;color:#8d6b80">Chưa có lá thư nào được mở.</p>';
     const replay = st.done ? `<button class="soft" data-act="replay">${card.mode === 'to-tinh' && ME === 'nhan' && !st.answer ? '💌 Xem lại lời nhắn và trả lời' : '🎆 Xem lại Lễ hội hoa'}</button>` : '';
     const wx = Object.entries(WEATHER).map(([k, w]) => `<div><i>${w.icon}</i>${w.name}<br><small style="font-weight:500">${w.tip}</small></div>`).join('');
     return `<div class="sec">Điều ước hôm nay 🌠</div>${wishesHTML()}
@@ -536,12 +673,12 @@ function bookHTML() {
         ${itemRow('📖', `Sưu tập ${BOOK_GOAL} loài hoa`, `${nb}/${SPECIES_ORDER.length} loài đã nở`, nb >= BOOK_GOAL ? '✅' : '')}
         ${itemRow('💞', 'Gắn kết cấp 3', `${nxt}<br>Tăng khi hai người cùng ở trong vườn, cùng tưới, hái hoa, ước sao băng, làm điều ước. Không giới hạn cấp.`, st.lvl >= 3 ? '✅' : '')}
         ${itemRow('🌸', 'Vườn nở rộ', `${FULL_BLOOM} bông cùng nở một lúc · cao nhất: ${st.peak || 0}${bloomQuest(st) ? ` · đang có ${bloomNow(st)} 🌸 (sự kiện ẩn: hoa tươi lâu gấp ${QUEST_LIFE})` : st.rong || st.done ? '' : ' · tính khi có sự kiện ẩn (đủ loài + cấp 3)'}`, st.rong || st.done ? '✅' : '')}
-        ${replay}
-        <div class="sec">Đồi hoa</div>${itemRow('⛰️', `${(st.hill || '').length}/${HILL_MAX} bông trên đồi`, 'Mỗi bông hái được gieo 1 bông lên đồi; hoa trên đồi tự sinh thêm 1–3 bông cùng loài theo thời gian (nhanh hơn khi hai người cùng ở đây). Cây chết, hoa tàn bỏ phí → hoa trên đồi héo theo.', Math.floor((st.hill || '').length / HILL_MAX * 100) + '%')}
+        ${replay}${st.done ? seasonHTML() : ''}
+        <div class="sec">Đồi hoa</div>${itemRow('⛰️', `${(st.hill || '').length}/${HILL_MAX} bông trên đồi`, 'Mỗi bông hái được gieo 1 bông lên đồi; hoa trên đồi tự sinh thêm 1–3 bông cùng loài theo thời gian (nhanh hơn khi hai người cùng ở đây). Gió nhẹ và giông thổi bay một ít hoa trên đồi. Cây chết, hoa tàn bỏ phí → hoa trên đồi héo theo.', Math.floor((st.hill || '').length / HILL_MAX * 100) + '%')}
         <div class="sec">Bộ sưu tập (${nb}/${SPECIES_ORDER.length})</div><div class="grid8">${book}</div>
         <div class="sec">Giống lai 💞 (${Object.keys(st.hybrids || {}).length})</div><p style="font-size:12px;color:#8d6b80;margin:0 0 6px">Hai người gieo vào hai luống kề nhau trong 5 giây → hai cây thành giống lai: hình của loài này, màu của loài kia, hái được thêm 50% ✨. Chuỗi tưới nối tiếp dài nhất: ${st.stats.chain || 0}.</p>${Object.entries(st.hybrids || {}).map(([k, n]) => `<span class="chip">💞 ${hybridName(k)} ×${n}</span>`).join('') || '<p class="empty">Chưa có giống lai nào.</p>'}
         <div class="sec">Hoa lấp lánh ✨ (${shinyN}/${SPECIES_ORDER.length - 1})</div><p style="font-size:12px;color:#8d6b80;margin:0 0 6px">Cứ khoảng 20 hạt gieo xuống lại có 1 cây lấp lánh: hái được gấp 2,5 ✨ và gieo 5 bông lên đồi.</p><div class="grid8">${shinyGrid}</div>
-        <div class="sec">Lá thư (${notesText.length}/${info?.notesTotal ?? DEMO_NOTES.length})</div>${notes}
+        <div class="sec">Lá thư bí mật (${notesText.length}/${info?.notesTotal ?? DEMO_NOTES.length})</div><p style="font-size:12px;color:#8d6b80;margin:0 0 6px">${SOLO ? 'Những lá thư' : ME === 'gui' ? `Những lá thư bạn viết sẵn cho ${esc(NAME[THEM])} lúc tạo vườn` : `Những lá thư ${esc(info.sender)} viết sẵn cho bạn`}, mở lần lượt mỗi khi hai bạn hái một bông Song Tâm 💞 (hoa chỉ lớn khi cả hai cùng ở trong vườn), lên cấp gắn kết hoặc làm vườn nở rộ.</p>${notes}
         <div class="sec">Thời tiết</div><div class="grid8" style="grid-template-columns:repeat(2,1fr)">${wx}</div>
         <div class="sec">Thành tích</div><p style="font-size:13px;line-height:1.6">🌸 Đã hái ${st.stats.harvest} bông · ⭐ ${st.stats.perfect} bông hoàn hảo · 💞 ${st.stats.combos} lần cùng tưới · 🌠 ${st.stats.stars} điều ước · 💀 ${st.stats.died} cây bị bỏ quên</p>
         <div class="sec">Cách chơi</div><p style="font-size:13px;line-height:1.6"><b>Chạm</b> vào luống: tự làm việc cần làm (khai hoang, gieo, tưới, bắt sâu, nhổ cỏ, hái). <b>Giữ tay</b> trên luống: chọn việc khác (bón phân, xem chi tiết…). <b>Vuốt</b>: một làn gió nhẹ. Chạm ô có dấu ＋ để mở rộng vườn. Chạm 📻 radio trên hàng rào để nghe nhạc YouTube cùng nhau.<br>
@@ -552,10 +689,10 @@ function bookHTML() {
         ${itemRow('🔊', 'Âm thanh', audio.on ? 'Đang bật' : 'Đang tắt', `<button data-act="snd">${audio.on ? 'Tắt' : 'Bật'}</button>`)}
         ${itemRow('🎵', 'Nhạc nền', `Âm lượng ${Math.round(audio.music * 100)}%`, `<button data-act="vol" data-d="-0.25">−</button><button data-act="vol" data-d="0.25">+</button>`)}
         ${itemRow('🔔', 'Hiệu ứng (tưới, hái…)', audio.sfxOn ? 'Đang bật' : 'Đang tắt', `<button data-act="sfx">${audio.sfxOn ? 'Tắt' : 'Bật'}</button>`)}
-        <button class="soft" data-act="tour">❓ Xem lại hướng dẫn</button>
+        <button class="soft" data-act="tour">❓ Xem lại hướng dẫn</button>${info?.edit ? '<a class="soft" href="/?sua=' + encodeURIComponent(slug) + '">✏️ Sửa lời nhắn, lá thư, màu hoa</a>' : ''}
         <button class="danger" data-act="restart">Trồng lại khu vườn từ đầu</button>`;
 }
-function refreshOpenSheet() { if (sheetOpen('chat')) return refreshLetters(); if (sheetOpen('shop')) refreshSheet(shopHTML()); else if (sheetOpen('seeds')) refreshSheet(seedsHTML()); else if (sheetOpen('book')) refreshSheet(bookHTML()); }
+function refreshOpenSheet() { if (sheetOpen('chat')) return refreshLetters(); if (sheetOpen('shop')) refreshSheet(shopHTML()); else if (sheetOpen('seeds')) refreshSheet(seedsHTML()); else if (sheetOpen('book')) refreshSheet(bookHTML()); else if (sheetOpen('memtree')) refreshSheet(memHTML()); }
 function onSheet(act, ds) {
     if (act === 'buy') net.send({ type: 'buy', item: ds.item, n: +ds.n || 1 });
     else if (act === 'tab') { shopTab = ds.tab; refreshSheet(shopHTML()); }
@@ -565,6 +702,7 @@ function onSheet(act, ds) {
     else if (act === 'toDecor') { shopTab = 'decor'; openSheet('shop', 'Chợ hoa', shopHTML(), onSheet); }
     else if (act === 'replay') { closeSheet(); buildFinale(t); }
     else if (act === 'postcard') makePostcard();
+    else if (act === 'memtree') openMemTree();
     else if (act === 'tour') { closeSheet(); tour.start(); }
     else if (act === 'snd') { audio.unlock(); audio.toggle(); refreshSheet(bookHTML()); }
     else if (act === 'vol') { audio.setMusic(clamp(audio.music + +ds.d, 0, 1)); refreshSheet(bookHTML()); }
@@ -612,6 +750,7 @@ const toDecorShop = () => { shopTab = 'decor'; openShop(); };
 $('clock').onclick = () => { // chạm đồng hồ: xem thời tiết + dự báo
     if (!st) return; tour?.notify('clock');
     const gt = gView(), w = weatherAt(st, gt), nb = Math.floor(gt / WEATHER_LEN) + 1, wn = weatherAt(st, nb * WEATHER_LEN + 1), left = Math.max(1, Math.ceil((nb * WEATHER_LEN - gt) / 60));
+    const sea = seasonAt(st, gt); if (sea) { const S = SEASONS[sea.k]; toast(`${S.icon} ${S.name} · ngày ${sea.day + 1}/${SEASON_DAYS} — hoa của mùa: ${S.sp.map(x => ICON[x]).join(' ')}`, 'sky', 'csea', 0); }
     toast(`${WEATHER[w].icon} ${WEATHER[w].name}: ${WEATHER[w].tip}`, 'sky', 'cw', 0); setTimeout(() => toast(`Khoảng ${left} phút nữa: ${WEATHER[wn].icon} ${WEATHER[wn].name}`, 'sky', 'cn', 0), 250);
 };
 $('bond').onclick = () => { if (!st) return; tour?.notify('bond'); toast(`💞 Cấp ${st.lvl} · ${Math.floor(st.xp)}/${xpFor(st.lvl + 1)} điểm — cùng ở trong vườn, cùng tưới, hái hoa để tăng. Cấp sau: ${levelGift(st.lvl + 1).text}`, 'love', 'bd', 0); };
@@ -653,12 +792,12 @@ async function makePostcard() {
 
 // ---------- giấy ghi chú: mỗi người một tờ, người kia đọc xong mới viết được tờ mới ----------
 const esc = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const unreadMail = () => { const m = st?.mail?.[THEM]; return !!(m && !m.read); };
+const unreadMail = () => { const m = st?.mail?.[THEM]; return !!(m && !m.read) || capsArrived().length > 0; }; // kể cả thư hẹn giờ vừa tới ngày
 const QUICK = ['Mình vào vườn rồi 🌸', 'Nhớ tưới cây giúp mình nhé 💧', 'Tối nay cùng chăm vườn nhé 🌙', 'Cảm ơn vì đã ở đây 🥰'];
 const when = at => { const d = new Date(at); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · ${d.getDate()}/${d.getMonth() + 1}`; };
 const memo = (m, cls, foot) => `<div class="memo ${cls}"><p>${esc(m.tx)}</p><small>${foot}</small></div>`;
 function lettersHTML() {
-    if (!st.decor.giay) return `<p class="empty">Để gửi lời nhắn, hãy mua 📝 <b>Giấy ghi chú & hòm thư</b> (${SHOP.giay.price} ✨) ở Chợ → 🏡 Vườn.<br>Mỗi người chỉ gửi được một tờ một lúc — người kia đọc xong mới viết được tờ mới, như những bức thư tay.</p><button class="soft" data-act="toDecor">🛒 Ra chợ</button>`;
+    if (!st.decor.giay) return `<p class="empty">Để gửi lời nhắn, hãy mua 📝 <b>Giấy ghi chú & hòm thư</b> (${SHOP.giay.price} ✨) ở Chợ → 🏡 Vườn.<br>Mỗi người chỉ gửi được một tờ một lúc — người kia đọc xong mới viết được tờ mới, như những bức thư tay.</p><button class="soft" data-act="toDecor">🛒 Ra chợ</button>` + (st.done ? capsHTML() : '');
     const theirs = st.mail[THEM], mine = st.mail[ME], partner = SOLO ? 'người ấy' : esc(NAME[THEM]);
     let h = `<div class="sec">Từ ${partner}</div>` + (theirs ? memo(theirs, 'them', `${partner} · ${when(theirs.at)}`) : `<p class="empty">Hòm thư đang trống. Khi ${partner} gửi, tờ ghi chú sẽ nằm ở đây.</p>`);
     h += `<div class="sec">Của bạn</div>`;
@@ -668,9 +807,9 @@ function lettersHTML() {
         + `<form class="note-form" id="noteForm"><textarea id="noteIn" maxlength="240" rows="4" placeholder="Viết vài dòng cho ${partner}…"></textarea><button>Gấp lại & gửi 💌</button></form>`;
     const old = (st.msgs || []).filter(m => !(theirs && m.at === theirs.at && m.r === THEM) && !(mine && m.at === mine.at && m.r === ME)).reverse();
     if (old.length) h += `<details class="old"><summary>Những tờ cũ (${old.length})</summary>${old.map(m => memo(m, m.r === ME ? 'me' : 'them', `${m.r === ME ? 'Bạn' : partner} · ${when(m.at)}`)).join('')}</details>`;
-    return h;
+    return h + capsHTML();
 }
-function bindLetters() { const f = $('noteForm'); if (f) f.onsubmit = e => { e.preventDefault(); const tx = $('noteIn').value.trim(); if (tx) net.send({ type: 'letter', tx }); }; }
+function bindLetters() { const f = $('noteForm'); if (f) f.onsubmit = e => { e.preventDefault(); const tx = $('noteIn').value.trim(); if (tx) net.send({ type: 'letter', tx }); }; bindCaps(); }
 function openLetters() {
     if (!st) return;
     audio.sfx('open'); tour?.notify('open:chat');
@@ -680,8 +819,10 @@ function openLetters() {
 }
 function refreshLetters() { // giữ nguyên chữ đang viết dở
     const el = $('noteIn'), draft = el?.value || '', focus = document.activeElement === el;
+    const ce = $('capIn'), cDraft = ce?.value || '', cFocus = document.activeElement === ce, cSel = $('capDays')?.value, cDate = $('capDate')?.value;
     refreshSheet(lettersHTML()); bindLetters();
     const el2 = $('noteIn'); if (el2) { el2.value = draft; if (focus) el2.focus(); }
+    const ce2 = $('capIn'); if (ce2) { ce2.value = cDraft; if (cFocus) ce2.focus(); if (cSel && [...$('capDays').options].some(o => o.value === cSel)) { $('capDays').value = cSel; $('capDate').value = cDate || ''; $('capDate').hidden = cSel !== 'date'; } }
     if (unreadMail()) net.send({ type: 'read' });
 }
 
@@ -751,6 +892,7 @@ function showMenu(info, acts, r) {
 const fmtCd = s => s >= 60 ? `${Math.floor(s / 60)} phút ${Math.round(s % 60)} giây` : `${Math.ceil(s)} giây`;
 function openItem(k, hb) {
     if (k === 'giay') return openLetters();
+    if (k === 'memtree') return openMemTree();
     if (k === 'radio') return openRadio();
     if (k === 'thung' && st.inv.compost >= 3) return net.send({ type: 'compost' });
     const I = SHOP[k] || { icon: k === 'xichdu' ? '💞' : '🌈', name: k === 'xichdu' ? 'Xích đu đôi' : 'Cầu vồng', desc: k === 'xichdu' ? 'Quà gắn kết cấp 2' : '' }, A = ACTS[k], gt = gView(), left = cdLeft(st, k, gt);
@@ -803,7 +945,7 @@ addEventListener('contextmenu', e => {
 });
 addEventListener('pointermove', e => {
     const now = performance.now();
-    if (!SOLO && now - lastCur > 70) { lastCur = now; net.send({ type: 'cur', x: ex(e) / VW(), y: ey(e) / VH() }); }
+    if (!SOLO && online.includes(THEM) && now - lastCur > 120) { lastCur = now; net.send({ type: 'cur', x: ex(e) / VW(), y: ey(e) / VH() }); } // chỉ gửi khi người kia đang ở đây
     if (!drag) return;
     const dt = Math.max(0.008, (now - drag.lt) / 1000), dx = (ex(e) - drag.x) / px, dy = (ey(e) - drag.y) / px;
     drag.x = ex(e); drag.y = ey(e); drag.lt = now; drag.path += Math.hypot(dx, dy);
@@ -813,8 +955,11 @@ addEventListener('pointermove', e => {
     if (st?.fw && !drag.counted && drag.path > Math.min(BW, BH) * 0.25) { drag.counted = true; audio.sfx('wind'); net.send({ type: 'swipe' }); }
 });
 setInterval(() => { if (windAcc[0] || windAcc[1]) { net.send({ type: 'wind', wx: windAcc[0], wy: windAcc[1] }); windAcc = [0, 0]; } }, 100);
+let lastGust = 0;
 addEventListener('pointerup', e => {
     if (!drag) return; clearTimeout(drag.timer);
+    // một lần vuốt hẳn hoi (không phải chạm) = cơn gió trong vườn: hoa trên đồi dễ bị thổi bay hơn (HILL_GUST_LOSS)
+    if (st && !fin && !st.fw && drag.path > Math.min(BW, BH) * 0.2 && performance.now() - lastGust > 1500) { lastGust = performance.now(); net.send({ type: 'gust' }); }
     const tap = drag.path < 6 && !drag.long && performance.now() - drag.t0 < 420, dx = ex(e) - drag.x0, dy = ey(e) - drag.y0;
     drag = null;
     if (popupUp()) return; // bảng vừa bật lên giữa lúc đang chạm (lá thư, báo cáo…)
@@ -857,7 +1002,7 @@ function konamiPush(k) {
     konami = [...konami, k].slice(-KONAMI.length);
     if (konami.join() !== KONAMI.join()) return;
     konami = [];
-    if (!CHEATS) return toast('Menu cheat đang tắt — đặt cheats: true trong config.js', 'bad', 'cheatoff');
+    if (!CHEATS) return toast('Menu cheat đang tắt (bật ở trang sửa vườn hoặc config.js)', 'bad', 'cheatoff');
     openCheats();
 }
 addEventListener('keydown', e => { const k = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }[e.key] || e.key.toLowerCase(); konamiPush(k); });
@@ -869,6 +1014,7 @@ const CHEAT_LIST = [
     ['Thời gian', [['time:60', '⏩ Tua 1 phút'], ['time:300', '⏩ Tua 5 phút'], ['night', '🌙 Sang đêm'], ['day', '☀️ Sang ngày'], ['speed:1', '🐢 ×1'], ['speed:5', '🐇 ×5'], ['speed:20', '🚀 ×20']]],
     ['Thời tiết (nhảy tới lần gần nhất)', Object.entries(WEATHER).map(([k, w]) => ['weather:' + k, `${w.icon} ${w.name}`])],
     ['Tiến trình', [['xp', '💞 +50 gắn kết'], ['book', '📖 Đủ mọi loài'], ['peak', '🌸 Đạt vườn nở rộ'], ['note', '💌 Mở lá thư tiếp theo'], ['finale', '🎆 Đủ điều kiện Lễ hội hoa']]],
+    ['Sau Lễ hội', [['season', '🍂 Sang mùa sau'], ['seasonfest', '🎉 Còn 1 bông là đủ hoa mùa'], ['memday', '🌳 +1 ngày cây kỷ niệm'], ['capopen', '⏳ Mở mọi thư hẹn giờ'], ['weather:snow', '❄️ Tuyết (mùa đông)']]],
     ['Khác', [['away', '📜 Xem thử "trong lúc vắng mặt"'], ['tour', '❓ Chạy lại hướng dẫn'], ['replay', '🎬 Chiếu lại đoạn kết'], ['unlift', '↩️ Huỷ đã xong lễ hội'], ['unanswer', '💗 Xoá câu trả lời']]]
 ];
 const cheatHTML = () => `<p style="font-size:12px;color:#8d6b80;text-align:center">Tác dụng lên cả khu vườn chung${SOLO ? '' : ' (người kia cũng thấy)'} · tốc độ thời gian ×${st.speed || 1}</p>`
@@ -919,7 +1065,7 @@ function frame(now) {
         audioScene({ weather: w, night: isNight(gView()), wind: Math.min(1, Math.hypot(wind.x, wind.y)) });
         pt0 = PERF ? now_() : 0; if ((hudT += dt) > 0.25) { hudT = 0; hud(); } pm('hud');
         if (DEMO && (demoT += dt) > 0.4) { demoT = 0; demoStep(); }
-        if (!tourStarted && !DEMO) { tourStarted = true; if (!tourDone()) setTimeout(() => { if ($('away').hidden) tour.start(); }, 600); }
+        if (!tourStarted && !DEMO && !PREVIEW) { tourStarted = true; if (!tourDone()) setTimeout(() => { if ($('away').hidden) tour.start(); }, 600); }
     }
 }
 function demoStep() { // ?demo: tự chăm vườn (để xem trước)

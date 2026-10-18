@@ -1,6 +1,7 @@
 {
     // Cloudflare Worker + Static Assets (public/) + Durable Objects (khu vườn chung của 2 người).
     // Thử ở máy: npm run dev   ·   Đưa lên mạng: npx wrangler login (một lần) rồi npm run deploy
+    // Tài khoản Cloudflare: đặt CLOUDFLARE_ACCOUNT_ID trong file .env (không đẩy lên git) để không deploy nhầm tài khoản
     "$schema": "node_modules/wrangler/config-schema.json",
     "name": "vuon-hoa",
     "main": "src/worker.js",
@@ -10,8 +11,8 @@
         "binding": "ASSETS"
     },
     "durable_objects": {
-        "bindings": [{ "name": "GARDEN", "class_name": "Garden" }]
+        "bindings": [{ "name": "GARDEN", "class_name": "Garden" }, { "name": "REGISTRY", "class_name": "Registry" }]
     },
-    "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Garden"] }],
+    "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Garden"] }, { "tag": "v2", "new_sqlite_classes": ["Registry"] }],
     "observability": { "enabled": true }
 }

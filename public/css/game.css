@@ -44,7 +44,11 @@ button {
     background: #82bef8;
 }
 
-@media (min-aspect-ratio: 13/16) {
+/* điện thoại xoay ngang: dùng cả màn hình (bố cục tự trải luống sang hai bên) */
+@media (orientation: landscape) and (pointer: coarse) {
+    #app { width: 100vw; }
+}
+@media (min-aspect-ratio: 13/16) and (pointer: fine) {
     #app {
         top: 2vh;
         bottom: 2vh;
@@ -866,6 +870,10 @@ textarea {
 .note-form { display: flex; flex-direction: column; gap: 8px; }
 .note-form textarea { box-sizing: border-box; width: 100%; padding: 12px 14px; border: 0; border-radius: 4px; background: repeating-linear-gradient(#fffbe0 0 27px, #f0e2b8 27px 28px); box-shadow: inset 0 0 0 1px #f0d9a0; font: 700 19px/28px "Dancing Script", cursive; color: var(--ink); resize: none; outline: none; }
 .note-form button { align-self: center; padding: 10px 20px; border-radius: 999px; background: #ff8fb4; color: #fff; font-weight: 800; }
+/* thư hẹn giờ: chọn ngày mở */
+.note-form select, .note-form input[type=date] { box-sizing: border-box; width: 100%; padding: 10px 14px; border: 0; border-radius: 999px; background: #fff3f7; box-shadow: inset 0 0 0 1.5px #f6c4d6; font-family: inherit; font-size: 14px; font-weight: 700; color: var(--ink); outline: none; appearance: none; }
+.note-form select { background-image: linear-gradient(45deg, transparent 50%, #d77ea0 50%), linear-gradient(135deg, #d77ea0 50%, transparent 50%); background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 36px; }
+.note-form input[type=date][hidden] { display: none; }
 .old { margin-top: 14px; }
 .old summary { cursor: pointer; font-size: 13px; font-weight: 700; color: #b0708f; }
 .old .memo { transform: none; opacity: 0.85; }
@@ -991,3 +999,5 @@ textarea {
 #nowPlaying[hidden] { display: none; }
 .hide-ui #nowPlaying { opacity: 0; pointer-events: none; }
 .chip { display: inline-block; margin: 2px; padding: 4px 9px; border-radius: 999px; background: #ffe6f0; font-size: 12px; font-weight: 700; }
+
+a.soft { display: block; box-sizing: border-box; text-align: center; text-decoration: none; }

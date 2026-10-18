@@ -98,11 +98,12 @@ export const hillSpecies = (Hh, c, spStr) => HILL_SP[spStr[Math.min(spStr.length
 export const hillColor = (Hh, c, spStr) => { const sp = hillSpecies(Hh, c, spStr); return sp === 'tulip' ? TULIP[c.rank % 4] : SP_COL[sp]; };
 
 /** Vẽ đồi + hoa. lean: gió (âm = trái), dark: hệ số tối về đêm, hide(c): ẩn bông (đoạn kết: cánh đã bay đi). */
-export function drawHill(C, Hh, spStr, lean, dark, hide = null) {
-    const { d, BW, oy, t } = C, sc = Hh.sc, b = Hh.base, nb = Math.min(1, dark * 1.2);
+/** tint (sau Lễ hội, theo mùa): { c: màu, g: độ pha vào đất đồi, f: độ pha vào hoa } */
+export function drawHill(C, Hh, spStr, lean, dark, hide = null, tint = null) {
+    const { d, BW, oy, t } = C, sc = Hh.sc, b = Hh.base, nb = Math.min(1, dark * 1.2), tg = tint ? tint.g : 0, tc = tint ? tint.c : [0, 0, 0];
     for (let y = 0; y < Hh.H; y++) {
         const j = y + oy; if (j < 0 || j >= C.H) continue;
-        for (let x = 0, q = y * BW * 4, o = j * BW * 4; x < BW; x++, q += 4, o += 4) if (b[q + 3]) { d[o] = b[q] * dark; d[o + 1] = b[q + 1] * dark; d[o + 2] = b[q + 2] * nb; d[o + 3] = 255; }
+        for (let x = 0, q = y * BW * 4, o = j * BW * 4; x < BW; x++, q += 4, o += 4) if (b[q + 3]) { d[o] = (b[q] + (tc[0] - b[q]) * tg) * dark; d[o + 1] = (b[q + 1] + (tc[1] - b[q + 1]) * tg) * dark; d[o + 2] = (b[q + 2] + (tc[2] - b[q + 2]) * tg) * nb; d[o + 3] = 255; }
     }
     const n = hillCount(Hh, spStr || ''); if (!n) return;
     if (Hh.firstT === undefined) Hh.firstT = t;
@@ -120,7 +121,7 @@ export function drawHill(C, Hh, spStr, lean, dark, hide = null) {
             if (stemU > 0.55 && f.hr > 2) { const lw = f.hr * 0.6 * stemU; line(d, BW, C.H, midx, by - sh * 0.35, midx + lw, by - sh * 0.35 - lw * 0.5, [96 * dark, 156 * dark, 64 * dark], 1); }
         }
         if (bloom <= 0) { disc(d, BW, C.H, lx, ly, Math.max(0.6, f.hr * 0.3 * stemU), [120 * dark, 176 * dark, 80 * dark]); continue; } // nụ xanh
-        const colH = lerp3(hillColor(Hh, f, spStr), FOG, 0.55 * f.fog).map(v => v * Math.max(dark, 0.65)), cen = CENTER.map(v => v * Math.max(dark, 0.65));
+        const colH = lerp3(tint ? lerp3(hillColor(Hh, f, spStr), tc, tint.f) : hillColor(Hh, f, spStr), FOG, 0.55 * f.fog).map(v => v * Math.max(dark, 0.65)), cen = CENTER.map(v => v * Math.max(dark, 0.65));
         const hr = f.hr * bloom, rot = Math.sin(t * 0.9 + f.ph) * 0.3 + lf * 0.5 + f.ph, pr = Math.max(0.5, hr * 0.5), cr = Math.max(0.5, hr * 0.38);
         if (hr < 0.9) { put(d, BW, C.H, lx, ly, colH, clamp(hr / 0.9, 0.45, 1)); continue; }
         if (hr < 1.5) { disc(d, BW, C.H, lx, ly, Math.max(0.7, hr * 0.85), colH); put(d, BW, C.H, lx, ly, cen, 0.8); continue; }

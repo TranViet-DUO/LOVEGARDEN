@@ -61,12 +61,20 @@ Game nông trại hoa pixel art chạy trên trình duyệt, cho **hai người 
   - 10 bông cùng nở một lúc. Khi đã đủ hai điều kiện trên, vườn mở **sự kiện ẩn**: một lá thư mời hiện lên, hoa tươi lâu gấp 3, chạm vào hoa không còn hái (muốn hái thì giữ tay hoặc chạm 2 lần) — để hai người chủ động gom đủ 10 bông.
 
   Hai người cùng vuốt gọi gió, cả vườn và ngọn đồi hoa bay lên trời, xếp thành chữ, rồi hiện lời nhắn (và câu hỏi nếu là tỏ tình).
-  Sau lễ hội vườn vẫn tiếp tục: điều ước làm đồi nở thêm, đêm nào cũng có đèn trời, săn hoa lấp lánh, xem lại lễ hội bất cứ lúc nào.
+  Sau lễ hội vườn vẫn tiếp tục:
+  - **Bốn mùa** 🌸☀️🍂❄️: xuân, hạ, thu, đông nối nhau (mỗi mùa 3 ngày vườn), đổi màu cỏ, đồi, tán cây và thời tiết (mùa đông có tuyết). Mỗi mùa có 4 loài hoa riêng; hái đủ 12 bông thì mở **Lễ hội của mùa**.
+  - **Cây kỷ niệm** 🌳 trên đồi: mỗi ngày (giờ Việt Nam) cả hai cùng ghé vườn, cây lớn thêm và treo một dải ruy băng; mốc 1, 3, 7, 14, 30, 50, 100 ngày có quà và thư. Lỡ ngày không bị phạt.
+  - **Thư hẹn giờ** ⏳ (trong 💌): viết hôm nay, chọn ngày mở (mai, 1 tuần, 1 tháng, ngày kỷ niệm lễ hội, hoặc tự chọn). Người kia chỉ thấy "có một lá thư đang chờ" — máy chủ không gửi nội dung trước ngày mở.
+  - Điều ước làm đồi nở thêm, đêm nào cũng có đèn trời, săn hoa lấp lánh, xem lại lễ hội bất cứ lúc nào.
 
-## Cấu hình: một file duy nhất, `config.js`
-Mỗi mục trong `gardens` là một khu vườn cho 2 người, mỗi người có **đường dẫn riêng** `https://<tên-miền>/<slug>`. Trong đó khai báo: lời nhắn, chữ xếp bằng hoa, chữ ký, câu hỏi tỏ tình, các lá thư bí mật (`notes`), bảng màu, nền trời đoạn kết, kiểu chữ. `cheats: true` bật menu thử nghiệm (mã Konami ↑↑↓↓←→←→BA).
+## Tạo khu vườn: ngay trên trang chủ
+Mở trang chủ `/` → **🌱 Tạo khu vườn mới**, điền tên hai người, chọn lời cảm ơn hay lời tỏ tình, viết lời nhắn, câu hỏi, các lá thư bí mật (mỗi dòng một lá), chọn màu hoa, nền trời, kiểu chữ. Có nút **👀 Xem thử đoạn kết** trước khi tạo. Tạo xong sẽ có hai **đường dẫn riêng** `https://<tên-miền>/<slug>`: một để gửi cho người ấy, một để bạn giữ. Đường dẫn của bạn mở được trang sửa (`/?sua=<slug>`, hoặc ✏️ trong Sổ tay) để đổi lời nhắn, thư, màu bất cứ lúc nào. Trang chủ nhớ các vườn bạn đã tạo trên máy đó.
 
-> ⚠️ Đặt `cheats: false` trước khi gửi đường dẫn thật cho người khác.
+Vẫn có thể khai báo vườn sẵn trong `config.js` (mục `gardens`, không bắt buộc) — khi đó `cheats: true` bật menu thử nghiệm cho các vườn này. Vườn tạo trên web bật menu thử nghiệm bằng ô "Nâng cao" trong form.
+
+> ⚠️ Tắt menu thử nghiệm trước khi gửi đường dẫn thật cho người khác.
+
+**Giới hạn** (sửa ở `limits` trong `config.js`): mỗi IP tạo 3 vườn/giờ, 6 vườn/ngày; tối đa 300 vườn cùng lúc. **Vườn tạo trên web không ai vào trong 48 giờ sẽ tự xoá** (mở lại đường dẫn sẽ thấy thông báo ở trang chủ).
 
 Không cần mật khẩu: đường dẫn riêng chính là chìa khoá, lần sau chỉ cần mở lại đúng đường dẫn đó (nên lưu dấu trang hoặc thêm vào màn hình chính). Ai có đường dẫn đều vào được với tư cách người đó, nên đừng chia sẻ công khai.
 
@@ -76,6 +84,7 @@ npm install
 npm run dev                  # http://localhost:8787/<slug>   (/play = chơi thử một mình)
 npm run dev:fresh            # xoá dữ liệu vườn ở máy rồi chạy dev (dữ liệu trình duyệt: thêm ?reset vào URL)
 npx wrangler login           # một lần
+echo CLOUDFLARE_ACCOUNT_ID=<mã tài khoản> > .env   # ghim tài khoản (file .env không đẩy lên git)
 npm run deploy               # -> https://vuon-hoa.<tài-khoản>.workers.dev
 npm run links -- https://vuon-hoa.<tài-khoản>.workers.dev
 npm run balance              # đo thời lượng game bằng bot

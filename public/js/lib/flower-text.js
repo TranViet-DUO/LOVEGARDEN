@@ -79,10 +79,10 @@ export function drawFlower(d, BW, BH, x, y, r, col, center, rot, open = 1, a = 1
 }
 
 // Chiếc lá nhỏ hướng (dx, dy) từ gốc (x, y)
-export function drawLeaf(d, BW, BH, x, y, len, dx, dy, a = 1) {
+export function drawLeaf(d, BW, BH, x, y, len, dx, dy, a = 1, col = null) { // col: tô một màu (lá thu)
     const n = Math.max(2, Math.round(len * 1.5));
     for (let k = 0; k <= n; k++) {
         const f = k / n, w = Math.sin(f * Math.PI) * len * 0.28;
-        disc(d, BW, BH, x + dx * len * f, y + dy * len * f, Math.max(0.5, w), f < 0.5 ? [70, 140, 70] : [104, 172, 84], a);
+        disc(d, BW, BH, x + dx * len * f, y + dy * len * f, Math.max(0.5, w), col || (f < 0.5 ? [70, 140, 70] : [104, 172, 84]), a);
     }
 }

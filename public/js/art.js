@@ -184,7 +184,7 @@ export function skyColors(tod) {
 export function drawSky(C, skyH, gt, weather, decor, seed) {
     const tod = (gt % DAY) / DAY, night = tod >= NIGHT_AT / DAY;
     let [top, bot] = skyColors(tod);
-    const gray = weather === 'storm' ? 0.72 : weather === 'rain' ? 0.5 : weather === 'cloud' ? 0.3 : weather === 'fog' ? 0.35 : 0, warm = weather === 'heat' ? 0.25 : 0;
+    const gray = weather === 'storm' ? 0.72 : weather === 'rain' ? 0.5 : weather === 'snow' ? 0.42 : weather === 'cloud' ? 0.3 : weather === 'fog' ? 0.35 : 0, warm = weather === 'heat' ? 0.25 : 0;
     if (gray) { const gt0 = (top[0] + top[1] + top[2]) / 3, gb = (bot[0] + bot[1] + bot[2]) / 3; top = lerp3(top, [gt0, gt0, gt0 + 8], gray); bot = lerp3(bot, [gb, gb, gb + 8], gray); }
     if (warm) { top = lerp3(top, [255, 190, 120], warm * 0.5); bot = lerp3(bot, [255, 200, 140], warm); }
     for (let y = 0; y < skyH + 2; y++) { const yy = y + C.oy; if (yy < 0 || yy >= C.H) continue; const c = lerp3(top, bot, y / skyH), r = c[0], g = c[1], b = c[2]; for (let x = 0, o = yy * C.BW * 4; x < C.BW; x++, o += 4) { C.d[o] = r; C.d[o + 1] = g; C.d[o + 2] = b; C.d[o + 3] = 255; } }
@@ -199,6 +199,24 @@ export function drawSky(C, skyH, gt, weather, decor, seed) {
     const nCloud = weather === 'sun' || weather === 'rainbow' ? 2 : weather === 'heat' ? 1 : weather === 'storm' ? 7 : 5, cc = weather === 'storm' ? [100, 104, 120] : weather === 'rain' ? [150, 156, 170] : night ? [80, 86, 120] : [255, 255, 255], cs = weather === 'wind' ? 4 : weather === 'storm' ? 3 : 1;
     for (let j = 0; j < nCloud; j++) { const x = ((hash(j * 3.3 + seed) * C.BW + C.t * (1.2 + j * 0.3) * cs) % (C.BW + 40)) - 20, y = skyH * (0.15 + 0.13 * j % 0.7), s = U * (0.035 + hash(j * 7.7) * 0.02); for (const [dx, dy, r] of [[0, 0, 1], [1.1, 0.25, 0.8], [-1.1, 0.3, 0.75], [0.4, -0.5, 0.75]]) disc(C.d, C.BW, C.H, x + dx * s * 1.4, y + dy * s + C.oy, r * s * 1.2, cc, 0.92); }
     return { night, tod };
+}
+// sau Lễ hội: hạt rơi theo mùa — xuân cánh hoa hồng, thu lá vàng, đông tuyết (tuyết rơi thì dày hơn); hạ thì thỉnh thoảng có chuồn chuồn
+export function drawSeason(C, k, t, heavy = false) {
+    const { BW, H } = C;
+    if (k === 'xuan' || k === 'thu') for (let j = 0; j < (k === 'thu' ? 14 : 10); j++) {
+        const sp = 6 + 6 * hash(j * 2.1), x = (hash(j * 1.3) * BW + t * sp * 0.6 + Math.sin(t * 0.9 + j) * 6) % BW, y = (hash(j * 4.7) * H + t * sp) % H;
+        if (k === 'xuan') { const c = j % 3 ? [255, 190, 214] : [255, 235, 242]; put(C.d, BW, H, x, y, c, 0.95); put(C.d, BW, H, x + (Math.sin(t * 3 + j) > 0 ? 1 : -1), y, c, 0.6); }
+        else { const c = [[236, 150, 60], [214, 100, 50], [246, 196, 80]][j % 3]; drawLeaf(C.d, BW, H, x, y, 2.2, Math.cos(t * 1.7 + j), Math.sin(t * 1.7 + j), 0.95, c); }
+    }
+    if (k === 'dong') for (let j = 0; j < Math.round(BW * (heavy ? 0.9 : 0.22)); j++) {
+        const sp = 8 + 10 * hash(j * 3.9), x = (hash(j * 1.9) * BW + Math.sin(t * 0.8 + j) * 4 + t * 2) % BW, y = (hash(j * 5.3) * H + t * sp) % H, big = hash(j * 7.7) > 0.7;
+        put(C.d, BW, H, x, y, [250, 252, 255], 0.9); if (big) { put(C.d, BW, H, x + 1, y, [250, 252, 255], 0.6); put(C.d, BW, H, x, y + 1, [250, 252, 255], 0.6); }
+    }
+    if (k === 'ha') for (let j = 0; j < 2; j++) { // chuồn chuồn lượn qua
+        const x = BW * (0.5 + 0.45 * Math.sin(t * (0.17 + j * 0.05) + j * 4)), y = H * (0.42 + 0.2 * Math.sin(t * (0.23 + j * 0.04) + j)), f = Math.sin(t * 30 + j) > 0;
+        for (let q = 0; q < 4; q++) put(C.d, BW, H, x - q, y, [70, 140, 200]);
+        for (const sd of [-1, 1]) { put(C.d, BW, H, x - 1, y + sd * (f ? 1 : 2), [220, 240, 255], 0.8); put(C.d, BW, H, x - 2, y + sd * (f ? 2 : 1), [220, 240, 255], 0.6); }
+    }
 }
 export function drawRain(C, t, heavy = false) { for (let j = 0; j < Math.round(C.BW * (heavy ? 1.3 : 0.6)); j++) { const x = (hash(j * 1.7) * C.BW + t * 30) % C.BW, y = (hash(j * 3.1) * C.H + t * (90 + 40 * hash(j))) % C.H; line(C.d, C.BW, C.H, x, y, x - 1, y + 3, [190, 210, 240], 1, 0.55); } }
 

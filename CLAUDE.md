@@ -20,10 +20,17 @@ npm run balance    # bot chơi theo luật thật, đo thời lượng tới L�
 
 ## Cấu trúc
 ```
-config.js            CẤU HÌNH DUY NHẤT: các khu vườn (id, mode, sender/receiver {slug,name}, flowerText, message, signature,
-                     question, notes[], palette, backdrop, flowerFont, textFont, seed) + cờ cheats
-src/worker.js        Worker: /<slug> -> play.html; /api/card/<slug> -> thông tin cho đúng người đó; /ws/<slug> -> Durable Object `Garden`
-public/play.html     trang game (có màn chào logo) · public/index.html trang chào (khi không có slug) · public/img/logo.png logo + favicon
+config.js            title, cờ cheats và (không bắt buộc) các khu vườn khai báo sẵn (id, mode, sender/receiver {slug,name}, flowerText,
+                     message, signature, question, notes[], palette, backdrop, flowerFont, textFont, seed). Vườn thường được tạo trên web.
+src/worker.js        Worker: /<slug> -> play.html; /api/card/<slug> -> thông tin cho đúng người đó; /ws/<slug> -> Durable Object `Garden`;
+                     POST /api/garden tạo vườn, GET|PUT /api/garden/<slug người gửi> đọc/sửa (cleanCfg kiểm tra dữ liệu).
+                     DO `Registry` (một bản, tên 'registry'): slug -> {gid, role} | {gone}, đếm vườn, giới hạn tạo theo IP/giờ (`quota`);
+                     worker đệm kết quả tra slug trong bộ nhớ (CACHE). Cấu hình vườn web lưu trong DO `Garden` (khoá 'cfg')
+public/play.html     trang game (có màn chào logo) · public/img/logo.png logo + favicon
+public/index.html    trang chủ: form tạo vườn, sửa vườn (`/?sua=<slug người gửi>`), danh sách vườn đã tạo (localStorage `vuon-hoa-mine`),
+                     xem thử đoạn kết (ghi `vuon-hoa-preview` rồi mở `/play?thu`: game.js dùng card đó và chiếu đoạn kết ngay)
+                     Form chia 5 bước (Hai người · Dịp · Lời nhắn · Lá thư · Màu sắc), mỗi lá thư một ô riêng. `/?tao` mở thẳng form. Mẫu gợi ý (cảm ơn mẹ, vợ/chồng, tỏ tình, chúc 20/10, cảm ơn tình yêu) ở public/js/lib/templates.js
+                     ({nhan}/{gui} thay bằng tên; chưa sửa chữ mẫu thì đổi tên sẽ tự điền lại; gần 20/10 mặc định mẫu 20/10)
 public/js/rules.js   ★ LUẬT CHƠI + NỘI DUNG (loài hoa, thời tiết, chợ, cấp gắn kết, đồi hoa, phạt/thưởng). Dùng chung máy chủ + trình duyệt
 public/js/game.js    vòng lặp, bố cục, điều khiển, HUD, chợ/sổ tay, menu giữ tay, báo cáo vắng mặt, hướng dẫn, cheat, Lễ hội hoa
 public/js/art.js     vẽ luống (cả ô chưa mua), 20 loài hoa (mầm → nụ → nở → héo/tàn, hoa lấp lánh), sâu, cỏ dại, trời, thời tiết,
@@ -37,10 +44,11 @@ public/js/hill.js    đồi hoa 3D phía sau hàng rào (chuyển từ legacy/sr
 public/js/audio.js   nhạc lofi + âm thanh cảnh + hiệu ứng, tự tạo bằng Web Audio (không có file nhạc)
 public/js/tour.js    hướng dẫn từng bước: vùng sáng + thẻ; mỗi bước chờ thao tác thật (`wait`), nhớ việc đã làm trước, tự ẩn khi đang mở bảng
 public/js/ui.js      thông báo nổi (toast), bảng trượt (sheet), lá thư
-public/js/net.js     WebSocket (tự nối lại, sync mỗi 15 s) hoặc "vườn ảo" trong trình duyệt cho /play
+public/js/net.js     WebSocket (tự nối lại, sync mỗi 30 s; vườn đã xoá -> /?het) hoặc "vườn ảo" trong trình duyệt cho /play
 public/js/lib/       math (hash, fbm, mulberry32), draw (put/disc/line/heart), palettes, backdrops (12 nền trời đoạn kết),
                      flower-text (chữ xếp bằng hoa), fonts
 scripts/balance.mjs  bot cân bằng · scripts/links.mjs in link
+TODO.md              ý tưởng để phát triển sau (người dùng và Claude cùng ghi; ý mới thêm vào mục phù hợp, xong thì đánh [x])
 legacy/              code cũ dựng đồi hoa (chỉ tham khảo, không triển khai)
 ```
 
@@ -53,6 +61,8 @@ legacy/              code cũ dựng đồi hoa (chỉ tham khảo, không tri�
 6. **Đừng ghi đè innerHTML liên tục** cho thứ bấm được (đồng hồ, bảng vật dụng…): dùng `setHTML` (chỉ ghi khi đổi), nếu không cú chạm sẽ mất.
 7. **Vòng lặp không bao giờ được chết:** `loop` đặt `requestAnimationFrame` trước rồi mới gọi `frame` trong try/catch (một lỗi lẻ từng làm game "treo"). Quay lại sau khi tab bị ẩn (> 4 s) thì không phát hàng loạt thông báo mà xin `sync`. Máy yếu (vẽ > 13 ms) tự vẽ 30 khung/giây. `?perf` đo thời gian từng phần (`window.__perf`).
 8. **Thư bí mật không gửi trước.** `/api/card` chỉ trả số lượng `notesTotal`; nội dung thư chỉ gửi kèm `state` khi đã mở (`st.notes` = số thư đã mở).
+   Thư hẹn giờ cũng vậy: worker gửi **mỗi người một bản state** (`broadcastState` → `viewFor(st, role, now)`), chữ của thư người kia viết mà chưa tới ngày mở bị thay bằng `''`.
+9. **Giờ thật chỉ dùng ngoài mô phỏng.** Cây kỷ niệm đếm ngày thật (`vnDay`, giờ Việt Nam) trong `visit(st, role, now)` — gọi khi kết nối, khi `sync` và đầu mỗi `apply`; không bao giờ trong `stepSim`.
 
 ## Luật chơi (tóm tắt — số liệu thật nằm trong rules.js)
 - **Vườn:** lưới 5×5 = `MAX_PLOTS` 25 ô. Ban đầu chỉ có **2 luống ở giữa** (ô 7 và 12); các ô khác `st: 'locked'`.
@@ -73,15 +83,21 @@ legacy/              code cũ dựng đồi hoa (chỉ tham khảo, không tri�
 - **Gắn kết 💞 (không giới hạn cấp):** +2/phút khi cả hai online (chơi một mình khi người kia chưa từng vào: +1/phút), cộng thêm từ hái hoa, cùng tưới, sao băng, điều ước. Mốc `xpFor(n)`; quà `levelGift(n)`: cấp 1–5 cố định (Song Tâm, phân vàng + thư, ✨ + Song Tâm, thư, cầu vồng), sau đó xoay vòng (✨ + hoa trên đồi, phân vàng + Song Tâm + thư, 3 hạt quý).
 - **Điều ước** (`st.wishes`, `WISHES`): luôn có 3 nhiệm vụ nhỏ (hái N bông, hái loài X, tưới, cùng tưới, hoàn hảo, gieo, dùng đồ, giúp sự kiện, bắt sâu, ước sao băng). Xong: ✨ + 3 💞 (sau Lễ hội: thêm 25 bông trên đồi). Mỗi bình minh vườn, điều ước đã xong được thay mới (`refreshWishes`); tiến độ cộng qua `wishTick`.
 - **Hoa lấp lánh:** 5% hạt gieo xuống thành cây lấp lánh (`P.shiny`): hái ×2,5 ✨, +5 bông trên đồi, ghi vào `st.shiny` (bộ sưu tập riêng trong Sổ tay).
-- **Sau Lễ hội hoa** (`st.done`): thư "Hành trình tiếp theo", điều ước làm đồi nở thêm, săn hoa lấp lánh, cấp gắn kết tiếp tục, đêm nào cũng có đèn trời bay lên, xem lại lễ hội và gửi bưu thiếp trong Sổ tay.
+- **Sau Lễ hội hoa** (`st.done`): thư "Hành trình tiếp theo", điều ước làm đồi nở thêm, săn hoa lấp lánh, cấp gắn kết tiếp tục, đêm nào cũng có đèn trời bay lên, xem lại lễ hội và gửi bưu thiếp trong Sổ tay. Thao tác trong vườn chỉ bị khoá lúc chờ vuốt (`st.fw`); lúc chiếu đoạn kết thì trình duyệt tự chặn chạm (trước đây `liftAt` khoá vĩnh viễn — lỗi đã sửa). Thêm ba phần:
+  - **Bốn mùa** (`SEASONS`, `seasonAt`): mỗi mùa `SEASON_DAYS = 3` ngày vườn tính từ `st.sf` (đầu ngày diễn ra lễ hội), thứ tự xuân → hạ → thu → đông. `WX_ODDS` đổi tỉ lệ thời tiết theo mùa; mùa đông mưa thành **tuyết** (`snow`: đất khô chậm ×0,4, không sâu, cây lớn ×0,7 trừ hoa mùa đông); xuân hay có cầu vồng. Mỗi mùa 4 loài hoa mùa (hái ×1,5 ✨); hái đủ `SEASON_GOAL = 12` → fx `seasonfest`: +80 ✨, +10 💞, hoa mùa lên đồi, 2 hạt mỗi loài của mùa sau. Mùa cũ ghi vào `st.seasons`. Hình: cỏ (`GRASS` + `buildGrass`), đồi (`HILL_TINT` → tham số `tint` của `drawHill`), tán cây (`SEASON_TINT` trong yard.js; hạ: cây hoa bên phải ra lá xanh), hạt rơi (`drawSeason` trong art.js: cánh hoa / chuồn chuồn / lá vàng / tuyết).
+  - **Cây kỷ niệm** (`st.mem = {days, streak, best, last, seen}`, `visit`): mỗi ngày giờ Việt Nam mà cả hai đều ghé (không cần cùng lúc; người kia chưa từng vào thì một người là đủ) → `days++`, chuỗi ngày liền `streak`. `memStage` 0–6 (mầm → cây hoa hồng 30 ngày → hoa vàng 100 ngày), vẽ ở `memTreeSpot` (thay cây nhỏ bên trái trên đồi), ruy băng = số ngày, tim bay khi chuỗi ≥ 3. Quà `memGift` ở mốc `MEM_MARKS` (1, 3, 7, 14, 30, 50, 100, rồi mỗi 50 ngày); thư mốc ở `MEM_TEXT` (game.js). Chạm cây → bảng `memHTML`.
+  - **Thư hẹn giờ** (`st.caps = [{id, r, to, tx, at, open, read}]`): `{type:'capsule', tx (≤600), days (1–730)}` mở lúc 00:00 giờ Việt Nam; mỗi người tối đa `CAP_MAX = 5` lá đang chờ. Tới ngày, game tự bật thư (`checkCaps`) và gửi `{type:'capread', id}`; hòm thư dựng cờ. Người kia chưa từng vào vườn thì thư quay về người viết (`capTo`).
+  - `mem`, `caps`, `seasons` giữ lại khi trồng lại vườn. Cheat nhóm "Sau Lễ hội": sang mùa sau, còn 1 bông hoa mùa, +1 ngày cây kỷ niệm, mở mọi thư hẹn giờ, tuyết.
 - **Lễ hội hoa** (`canFinale`): đủ `BOOK_GOAL = 14` trên 20 loài đã nở, gắn kết cấp ≥ 3, và **vườn nở rộ** (`bloomNow` ≥ `FULL_BLOOM = 10` bông cùng nở). Khi đủ hai điều kiện đầu thì vào **sự kiện ẩn** (`bloomQuest`; luôn có, kể cả khi vườn đã từng nở rộ trước đó — chỉ 10 bông cùng nở TRONG sự kiện mới đặt `st.rong` và mở Lễ hội, fx `quest`): hoa tươi lâu ×`QUEST_LIFE` = 3 (cả lúc tàn → khô), game.js hiện lá thư mời một lần mỗi vòng (localStorage `vuon-hoa-quest-<slug>`), dòng gợi ý đếm x/10, chạm vào hoa không hái (hái qua menu). Sau đó hai người vuốt tổng 6 lần (mỗi người ít nhất 1 lần nếu cả hai từng vào vườn). Hoa trong vườn và trên đồi bay lên trời, máy ngước theo, hoa xếp thành `flowerText`, rồi hiện `message`, `signature`, và `question` nếu là tỏ tình.
 - **Đồi hoa** (`st.hill`): chuỗi mã loài, mỗi ký tự = 1 bông, tối đa `HILL_MAX = 1500`.
   - Mỗi bông hái được gieo **1 bông** lên đồi (bồ công anh, dã quỳ: 2). Cùng tưới +1, vườn nở rộ +2 mỗi bông đang nở.
-  - **Tự sinh sôi:** khi có người trong vườn, mỗi bông trên đồi có xác suất `HILL_SEED_RATE`/phút sinh thêm 1–3 bông cùng loài (×1,8 khi hai người cùng ở đây) → đồi phủ nhanh dần về cuối.
+  - **Tự sinh sôi:** khi có người trong vườn, mỗi bông trên đồi có xác suất `HILL_SEED_RATE`/phút sinh thêm 1–3 bông cùng loài (×1,5 khi hai người cùng ở đây) → đồi phủ nhanh dần về cuối.
   - Mất hoa: cây chết (−4), hoa tàn khô (−2).
+  - **Vuốt màn hình** (`{type:'gust'}`, gửi khi thả tay sau một lần vuốt dài, tối đa 1 lần/1,5 s): cơn gió `GUST_TIME` = 20 giây vườn (`st.gust`), cộng thêm `HILL_GUST_LOSS` = 4%/phút vào xác suất gió thổi bay bên dưới (cả lúc trời lặng; fx `hillWind` với `w: 'gust'`). Không có tác dụng lúc chờ vuốt Lễ hội / đoạn kết.
+  - **Gió thổi bay** (`HILL_WIND_LOSS`): khi có người trong vườn, mỗi bông trên đồi có xác suất 2%/phút (gió nhẹ) hoặc 4%/phút (giông) bị cuốn đi (bớt từ cuối chuỗi, fx `hillWind`: cánh hoa bay + thông báo một lần mỗi đợt thời tiết). Không tính lúc chạy đoạn kết.
   - `hill.js` vẽ `hillCount = tỉ lệ × số chỗ mọc` (~5400 chỗ).
 - **Ngày/đêm:** 1 ngày = 12 phút (`DAY = 720` s; 05:00–21:00 là ngày = 8 phút).
-- **Thời tiết** đổi mỗi 4 phút (`WEATHER`): nắng, mây, mưa, nắng gắt, gió nhẹ, sương mù, giông, cầu vồng (chỉ sau mưa hoặc giông). Mỗi loại có thử thách và phần thưởng riêng; xem `stepSim`.
+- **Thời tiết** đổi mỗi 4 phút (`WEATHER`): nắng, mây, mưa, nắng gắt, gió nhẹ, sương mù, giông, cầu vồng (chỉ sau mưa hoặc giông), tuyết (chỉ mùa đông sau Lễ hội). Mỗi loại có thử thách và phần thưởng riêng; xem `stepSim`.
 
 ### 20 loài (`SPECIES`) — tất cả trồng trên đất (không có loài cần ao nước)
 Cúc hoạ mi (dễ) · Hướng dương (chỉ lớn ban ngày) · Cúc vạn thọ (xua sâu cả 8 ô quanh) · Bồ công anh (thích gió; hái được hạt + đồi ×2) · Tulip ·
@@ -155,10 +171,14 @@ thì hiện "Chạm để nghe cùng" và lần chạm đầu trên trang sẽ b
 - **Thêm sự kiện:** thêm vào `EVENTS`, điều kiện + tác dụng trong `rollEvent`/`endEvent`/`apply case 'ev'`, hình trong `drawEvent`, thông báo trong `onEvent`.
 - **Thêm thời tiết:** thêm vào `WEATHER` và `baseWeather`, cài tác dụng trong `stepSim`, rồi phần hình ở `drawSky`/`drawWeatherFx` và âm thanh ở `audio.scene`.
 - **Đổi cân bằng:** sửa số trong rules.js rồi `npm run balance`. Mục tiêu: bot 2 người khoảng 40–50 phút, 1 người khoảng 60–90 phút, đồi phủ ~50–90% lúc mở Lễ hội (người thật chậm hơn bot khoảng 1,5 lần nên ra khoảng 1–2 giờ). Hiện tại (bot giữ hoa khi có sự kiện ẩn): 2 người 55–57 phút, 1 người 77–99 phút.
-- **Kiểm tra giao diện:** `npm run dev`, mở `/play` (một mình) hoặc hai cửa sổ `/lan-9x4m` và `/minh-7k2q`, dùng menu cheat để tua thời gian, đổi thời tiết, cho mọi cây nở.
+- **Kiểm tra giao diện:** `npm run dev`, mở `/play` (một mình) hoặc tạo một vườn ở trang chủ rồi mở hai đường dẫn ở hai cửa sổ, dùng menu cheat để tua thời gian, đổi thời tiết, cho mọi cây nở.
 
 ## Lưu ý
-- Trước khi gửi link thật: đặt `cheats: false` trong `config.js` rồi deploy lại.
+- **Bảo mật / riêng tư:** slug vườn web là 12 ký tự ngẫu nhiên (không chứa tên, không đoán được); không có API liệt kê vườn hay số vườn. Người nhận không nhận `flowerText/message/signature/question` qua `/api/card` (`SECRET_KEYS`) — chỉ nhận trong state (`m.ending`) khi `st.liftAt`/`st.done`. Chữ người dùng nhập bị lọc `< >` (tên, chữ ngắn: cả nháy) trong `cleanCfg`. Header bảo mật: `secure()` trong worker + `public/_headers`. `config.js`: `gardens: []` (đừng commit vườn thật vì repo GitHub công khai). Tài khoản Cloudflare ghim bằng `CLOUDFLARE_ACCOUNT_ID` trong `.env` (không lên git).
+- **Giới hạn & tự xoá** (`limits` trong config.js): mỗi IP 3 vườn/giờ, 6/ngày; cả trang 60/giờ; tối đa 300 vườn; 8 kết nối/vườn. Vườn web không ai vào trong `idleHours` = 48 giờ thì alarm của `Garden` xoá sạch, slug thành bia mộ `{gone}` (card/ws/sửa trả 410, mở link -> `/?het`). Vườn trong config.js không bị xoá. Lưu ý: thư hẹn giờ, cây kỷ niệm cũng mất theo vườn.
+- **Ghi trạng thái:** `save()` khi `apply` đổi gì đó, khi vào/rời vườn; `sync` chỉ `lazySave()` (tối đa mỗi 60 s) vì `advance` tính bù được từ `st.real`. Con trỏ (`cur`) chỉ gửi khi người kia online, 120 ms/lần.
+- **Tạo vườn:** trang chủ `/` → form → hai đường dẫn. Người gửi sửa được (`/api/card` trả `edit: true` → nút ✏️ trong Sổ tay); sửa xong áp dụng khi mở lại game. id, slug, seed không đổi khi sửa.
+- Trước khi gửi link thật: tắt menu thử nghiệm (ô "Nâng cao" của vườn web; `cheats: false` trong `config.js` cho vườn khai báo sẵn).
 - Đổi `id` khu vườn trong config là tạo vườn mới (mất tiến trình cũ). Đổi `slug` là đổi đường dẫn.
 - Không có mật khẩu: đường dẫn `/<slug>` chính là chìa khoá. Tiến trình lưu ở máy chủ, mở lại đúng đường dẫn (máy nào cũng được) là vào lại vườn. Trang chào `/` nhớ khu vườn đã vào trên máy đó (localStorage `vuon-hoa-last`) và hiện nút quay lại.
 - Canvas game vẽ ở lưới pixel nhỏ (`px` = kích thước một ô pixel, khoảng min(màn hình)/190) rồi phóng to với `image-rendering: pixelated`. Bộ đệm cao thêm 1 hàng (`BH1`) để máy quay trượt mịn ở đoạn kết.

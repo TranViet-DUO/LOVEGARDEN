@@ -35,7 +35,7 @@ export const SPECIES = {
     lan: { name: 'Hoa lan', price: 45, grow: 11, dry: 0.3, reward: 72, bug: 0.05, heatHurt: true, wx: { cloud: 1.8, fog: 2, sun: 0.7, heat: 0.3 }, tip: 'Ưa râm mát: lớn nhanh khi trời mây hay sương mù; nắng gắt làm lan yếu đi.' },
     quynh: { name: 'Hoa quỳnh', price: 55, grow: 9, dry: 0.3, reward: 85, bug: 0.04, nightBloom: true, life: 180, tip: 'Chỉ nở về đêm và tàn rất nhanh — canh hái kịp nhé.' },
     maudon: { name: 'Mẫu đơn', price: 70, grow: 14, dry: 0.35, reward: 130, bug: 0.07, needFert: true, tip: 'Hoa vương giả: nụ chỉ lớn tiếp khi đã được bón phân ít nhất một lần.' },
-    songtam: { name: 'Song Tâm', price: 0, grow: 6, dry: 0.3, reward: 50, bug: 0, together: true, note: true, tip: 'Không bán. Chỉ lớn khi cả hai cùng ở trong vườn. Hái sẽ mở một lá thư.' }
+    songtam: { name: 'Song Tâm', price: 0, grow: 6, dry: 0.3, reward: 50, bug: 0, together: true, note: true, tip: 'Không bán. Chỉ lớn khi cả hai cùng ở trong vườn. Hái một bông = mở một lá thư bí mật viết sẵn khi tạo vườn.' }
 };
 export const SPECIES_ORDER = Object.keys(SPECIES);
 export const BOOK_GOAL = 14; // số loài cần sưu tập để mở Lễ hội hoa
@@ -49,25 +49,28 @@ export const WEATHER = {
     wind: { icon: '🍃', name: 'Gió nhẹ', tip: 'Gió thổi bay sâu, nhưng cỏ dại lan nhanh. Bồ công anh lớn nhanh.' },
     fog: { icon: '🌫️', name: 'Sương mù', tip: 'Đất giữ ẩm tốt, nhưng sâu bọ sinh sôi.' },
     storm: { icon: '⛈️', name: 'Giông', tip: 'Mưa to tự tưới, nhưng cây non bị quật yếu đi — mái che sẽ bảo vệ.' },
-    rainbow: { icon: '🌈', name: 'Cầu vồng', tip: 'Sau mưa: hái hoa được thêm 50% ✨ và cây lớn nhanh hơn.' }
+    rainbow: { icon: '🌈', name: 'Cầu vồng', tip: 'Sau mưa: hái hoa được thêm 50% ✨ và cây lớn nhanh hơn.' },
+    snow: { icon: '❄️', name: 'Tuyết rơi', tip: 'Chỉ có vào mùa đông: đất lâu khô, sâu ngủ đông, cây lớn chậm 30% — trừ hoa mùa đông.' }
 };
 const isDawn = gt => gt % DAY < DAY / 6; // 05:00–09:00
 const isNoon = gt => { const t = gt % DAY; return t >= DAY * 5 / 24 && t < DAY * 9 / 24; }; // 10:00–14:00
 export const isNight = gt => gt % DAY >= NIGHT_AT;
+// ngưỡng cộng dồn (%) cho: mưa, giông, nắng gắt, gió, sương, mây — còn lại là nắng. Sau Lễ hội đổi theo mùa.
+const WX_ODDS = { base: [12, 16, 24, 34, 42, 58], xuan: [20, 22, 25, 33, 43, 58], ha: [8, 16, 36, 44, 46, 56], thu: [8, 10, 14, 38, 50, 66], dong: [26, 26, 26, 36, 52, 68] };
 function baseWeather(st, b) {
-    const h = ihash(st.seed, b, 911, 7) * 100, night = isNight(b * WEATHER_LEN + 1);
-    if (h < 12) return 'rain';
-    if (h < 16) return 'storm';
-    if (h < 24) return night ? 'cloud' : 'heat';
-    if (h < 34) return 'wind';
-    if (h < 42) return 'fog';
-    if (h < 58) return 'cloud';
+    const h = ihash(st.seed, b, 911, 7) * 100, gt = b * WEATHER_LEN + 1, night = isNight(gt), sea = seasonAt(st, gt), o = WX_ODDS[sea ? sea.k : 'base'];
+    if (h < o[0]) return sea && sea.k === 'dong' ? 'snow' : 'rain'; // mùa đông: mưa thành tuyết
+    if (h < o[1]) return 'storm';
+    if (h < o[2]) return night ? 'cloud' : 'heat';
+    if (h < o[3]) return 'wind';
+    if (h < o[4]) return 'fog';
+    if (h < o[5]) return 'cloud';
     return 'sun';
 }
 export function weatherAt(st, gt = st.gt) {
     if (st.wxo && gt >= st.wxo.from && gt < st.wxo.to) return st.wxo.w; // chuông gió vừa gọi gió
     const b = Math.floor(gt / WEATHER_LEN), prev = baseWeather(st, b - 1);
-    if ((prev === 'rain' || prev === 'storm') && !isNight(gt) && ihash(st.seed, b, 912, 1) < 0.45) return 'rainbow';
+    if ((prev === 'rain' || prev === 'storm') && !isNight(gt) && ihash(st.seed, b, 912, 1) < (seasonAt(st, gt)?.k === 'xuan' ? 0.65 : 0.45)) return 'rainbow';
     return baseWeather(st, b);
 }
 
@@ -76,6 +79,9 @@ export function weatherAt(st, gt = st.gt) {
 // Mỗi bông hái được gieo 1 bông lên đồi; rồi theo thời gian, mỗi bông trên đồi thỉnh thoảng tự sinh thêm 1–3 bông cùng loài
 // (lan nhanh hơn khi hai người cùng ở trong vườn). Cây chết / hoa tàn bỏ phí -> vài bông trên đồi héo đi.
 export const HILL_MAX = 1500, HILL_SEED_RATE = 0.025; // HILL_SEED_RATE: xác suất mỗi bông trên đồi sinh sôi trong 1 phút
+export const HILL_WIND_LOSS = { wind: 0.02, storm: 0.04 }; // xác suất mỗi bông trên đồi bị gió thổi bay trong 1 phút (gió nhẹ / giông)
+// Người chơi vuốt màn hình ({type:'gust'}) = một cơn gió trong vườn GUST_TIME giây: cộng thêm HILL_GUST_LOSS vào xác suất trên (cả lúc trời lặng)
+export const HILL_GUST_LOSS = 0.04, GUST_TIME = 20;
 export const HILL_CODE = { cuc: 'c', huongduong: 'h', tulip: 't', oaihuong: 'o', camtucau: 'm', hong: 'r', quynh: 'q', songtam: 's', lan: 'l', xuongrong: 'x', mai: 'a', bocongcanh: 'b', maudon: 'd', vantho: 'v', muoigio: 'g', daquy: 'y', camchuong: 'k', thuocduoc: 'u', ly: 'i', hoagiay: 'z' };
 export const HILL_SP = Object.fromEntries(Object.entries(HILL_CODE).map(([k, v]) => [v, k]));
 function addHill(st, sp, n, fx, code = HILL_CODE[sp] || 'c') {
@@ -167,6 +173,7 @@ export const freshState = (seed = 1, keep = {}) => ({
     mail: keep.mail || {}, msgs: keep.msgs || [], radio: keep.radio || null,
     hybrids: {}, lastPlant: null, chain: null,
     joined: keep.joined || {}, answer: keep.answer || null, done: keep.done || false,
+    mem: keep.mem || null, caps: keep.caps || [], seasons: keep.seasons || [], sf: null, sea: null, // sau Lễ hội (giữ khi trồng lại vườn)
     lastWater: null, starCaught: -1, fw: false, swipes: { gui: 0, nhan: 0 }, liftAt: 0, round: (keep.round || 0) + 1
 });
 
@@ -185,6 +192,78 @@ export function starAt(st, gt = st.gt) {
     if (!isNight(gt) || ihash(st.seed, min, 77, 1) >= 0.4 || s < 10 || s >= 16 || st.starCaught === min) return null;
     return { min, f: (s - 10) / 6, y: 0.06 + 0.14 * ihash(st.seed, min, 77, 2), dir: ihash(st.seed, min, 77, 3) < 0.5 ? 1 : -1 };
 }
+// ---------- SAU LỄ HỘI HOA: bốn mùa, cây kỷ niệm, thư hẹn giờ ----------
+export const SEASON_DAYS = 3, SEASON_GOAL = 12; // mỗi mùa 3 ngày vườn; hái đủ 12 bông hoa mùa -> Lễ hội mùa
+export const SEASON_ORDER = ['xuan', 'ha', 'thu', 'dong'];
+export const SEASONS = {
+    xuan: { icon: '🌸', name: 'Mùa xuân', sp: ['mai', 'tulip', 'camchuong', 'hong'], tip: 'Mưa xuân lất phất, cầu vồng hay ghé sau mưa.' },
+    ha: { icon: '☀️', name: 'Mùa hạ', sp: ['huongduong', 'muoigio', 'xuongrong', 'hoagiay'], tip: 'Nắng gắt nhiều hơn, đất mau khô — nhớ tưới nhé.' },
+    thu: { icon: '🍂', name: 'Mùa thu', sp: ['daquy', 'cuc', 'vantho', 'camtucau'], tip: 'Gió heo may thổi, lá vàng rơi, sương sớm giăng.' },
+    dong: { icon: '❄️', name: 'Mùa đông', sp: ['lan', 'quynh', 'oaihuong', 'ly'], tip: 'Có tuyết rơi: đất lâu khô, sâu ngủ đông, cây lớn chậm hơn (trừ hoa mùa đông).' }
+};
+/** mùa ở thời điểm gt (chỉ có sau Lễ hội): { k, n: mùa thứ mấy kể từ lễ hội (0..), day: ngày thứ mấy trong mùa (0..) } */
+export function seasonAt(st, gt = st.gt) {
+    if (!st.done || st.sf == null) return null;
+    const d = Math.floor(Math.max(0, gt - st.sf) / DAY), n = Math.floor(d / SEASON_DAYS);
+    return { k: SEASON_ORDER[n % 4], n, day: d % SEASON_DAYS };
+}
+export const inSeason = (st, sp, gt = st.gt) => { const s = seasonAt(st, gt); return !!s && SEASONS[s.k].sp.includes(sp); };
+function seasonTick(st, fx) { // sang mùa mới: ghi mùa cũ vào nhật ký
+    if (!st.done) return;
+    if (st.sf == null || st.sf > st.gt) st.sf = Math.floor(st.gt / DAY) * DAY; // mùa xuân bắt đầu từ ngày diễn ra lễ hội
+    const s = seasonAt(st); if (st.sea && st.sea.n === s.n) return;
+    if (st.sea) { st.seasons ||= []; st.seasons.push({ k: st.sea.k, n: st.sea.n, have: st.sea.have, fest: st.sea.fest }); if (st.seasons.length > 40) st.seasons.shift(); }
+    fx.push({ k: 'season', s: s.k, first: !st.sea });
+    st.sea = { k: s.k, n: s.n, have: 0, fest: false };
+}
+function seasonHarvest(st, sp, fx, ctx) { // hái một bông hoa mùa; đủ SEASON_GOAL bông -> Lễ hội mùa
+    const S = st.sea; if (!S || S.fest || !inSeason(st, sp)) return;
+    if (++S.have < SEASON_GOAL) return;
+    S.fest = true; st.inv.dew += 80; addXp(st, 10, fx, ctx);
+    for (const x of SEASONS[SEASON_ORDER[(SEASON_ORDER.indexOf(S.k) + 1) % 4]].sp) giveSeed(st, x, 2); // hạt cho mùa sau
+    for (const x of SEASONS[S.k].sp) addHill(st, x, 12, fx);
+    fx.push({ k: 'seasonfest', s: S.k, n: S.n });
+}
+
+// cây kỷ niệm: mỗi ngày thật (giờ Việt Nam) cả hai đều ghé vườn — không cần cùng lúc — cây lớn thêm, treo thêm một dải ruy băng
+export const vnDay = ms => Math.floor((ms + 7 * 3600e3) / 86400e3);
+const MEM_GIFTS = {
+    1: { dew: 20, text: '20 ✨' }, 3: { dew: 30, songtam: 1, text: '30 ✨ + 1 hạt Song Tâm' }, 7: { dew: 60, phanvang: 2, text: '60 ✨ + 2 phân vàng' },
+    14: { seeds: ['maudon', 'quynh', 'lan'], text: '3 hạt quý (mẫu đơn, quỳnh, lan)' }, 30: { dew: 150, hill: 100, text: '150 ✨ + 100 bông trên đồi' },
+    50: { dew: 250, phanvang: 3, songtam: 2, text: '250 ✨ + 3 phân vàng + 2 hạt Song Tâm' }, 100: { dew: 500, hill: 300, phanvang: 5, text: '500 ✨ + 300 bông trên đồi + 5 phân vàng' }
+};
+export const memGift = n => MEM_GIFTS[n] || (n > 100 && n % 50 === 0 ? { dew: 300, hill: 100, text: '300 ✨ + 100 bông trên đồi' } : null);
+export const MEM_MARKS = [1, 3, 7, 14, 30, 50, 100];
+export const memStage = days => days >= 100 ? 6 : days >= 30 ? 5 : days >= 14 ? 4 : days >= 7 ? 3 : days >= 3 ? 2 : days >= 1 ? 1 : 0;
+/** một người ghé vườn (lúc kết nối hoặc gửi tin). Dùng giờ thật nên nằm ngoài mô phỏng. Trả về fx khi cây lớn thêm một ngày */
+export function visit(st, role, now) {
+    const fx = [];
+    if (!st.done || !ROLES.includes(role)) return fx;
+    const M = st.mem ||= { days: 0, streak: 0, best: 0, last: -1, seen: {} }, day = vnDay(now);
+    if (M.seen[role] === day) return fx;
+    M.seen[role] = day;
+    if (M.last === day || (st.joined.gui && st.joined.nhan && !ROLES.every(r => M.seen[r] === day))) { fx.push({ k: 'memseen', role }); return fx; } // chờ người kia cũng ghé hôm nay
+    M.streak = M.last === day - 1 ? M.streak + 1 : 1; M.best = Math.max(M.best, M.streak); M.last = day; M.days++;
+    const g = memGift(M.days);
+    if (g) {
+        st.inv.dew += g.dew || 0; st.inv.phanvang = (st.inv.phanvang || 0) + (g.phanvang || 0);
+        if (g.songtam) giveSeed(st, 'songtam', g.songtam);
+        for (const x of g.seeds || []) giveSeed(st, x, 1);
+        if (g.hill) growHill(st, g.hill, fx);
+    }
+    fx.push({ k: 'memday', n: M.days, streak: M.streak, gift: g ? g.text : '' });
+    return fx;
+}
+
+// thư hẹn giờ: người nhận chỉ đọc được khi tới ngày mở (máy chủ giấu chữ trước đó — xem viewFor)
+export const CAP_MAX = 5; // mỗi người tối đa 5 lá đang chờ mở
+export const capTo = (st, c) => (st.joined[c.to] ? c.to : c.r); // người kia chưa từng vào vườn: thư quay về người viết
+/** bản state gửi riêng cho `role`: giấu chữ của thư hẹn giờ người kia viết mà chưa tới ngày mở */
+export function viewFor(st, role, now) {
+    if (!st.caps || !st.caps.some(c => c.r !== role && c.open > now)) return st;
+    return { ...st, caps: st.caps.map(c => (c.r === role || c.open <= now ? c : { ...c, tx: '' })) };
+}
+
 export const FULL_BLOOM = 10; // số bông cùng nở một lúc để đạt "Vườn nở rộ"
 export const QUEST_LIFE = 3;   // sự kiện ẩn "Vườn nở rộ": hoa tươi lâu gấp 3 (tàn khô cũng chậm gấp 3) để dễ gom đủ bông
 export const bloomNow = st => st.plots.filter(P => P.bloom && !P.faded).length;
@@ -211,12 +290,16 @@ function addXp(st, n, fx, ctx) {
         if (g.seeds) for (let k = 0; k < g.seeds; k++) giveSeed(st, randomSeed(st, 20 + k, st.lvl, true));
         if (g.hill) growHill(st, g.hill, fx);
         fx.push({ k: 'level', lvl: st.lvl, text: g.text });
-        if (g.note) unlockNote(st, fx, ctx);
+        if (g.note) unlockNote(st, fx, ctx, 'level');
     }
 }
 // thêm n bông trên đồi theo loài đang có trên đồi (hoặc cúc nếu đồi trống)
 function growHill(st, n, fx) { for (let k = 0; k < n; k++) { const h = st.hill || ''; addHill(st, null, 1, fx, h.length ? h[Math.floor(ihash(st.seed, st.step, 880 + k, n) * h.length)] : 'c'); } }
-function unlockNote(st, fx, ctx) { if (st.notes < (ctx.notesTotal || 0)) { st.notes++; fx.push({ k: 'note', n: st.notes }); } }
+// mở lá thư bí mật tiếp theo; `by`: vì sao mở (songtam / level / bloom) để game ghi rõ trên lá thư
+function unlockNote(st, fx, ctx, by) {
+    if (st.notes < (ctx.notesTotal || 0)) { st.notes++; fx.push({ k: 'note', n: st.notes, by }); }
+    else if (by === 'songtam' && ctx.notesTotal) fx.push({ k: 'noteAll' }); // hái Song Tâm khi thư đã mở hết
+}
 const reset = (P, extra = {}) => { for (const k of Object.keys(P)) delete P[k]; Object.assign(P, { st: 'soil', weed: 0 }, extra); };
 const randomSeed = (st, k, salt, rare = false) => { // hạt ngẫu nhiên, nghiêng về loài rẻ (rare: nghiêng về loài quý)
     const pool = SPECIES_ORDER.filter(s => SPECIES[s].price), u = ihash(st.seed, st.step, 333 + k, salt);
@@ -268,8 +351,8 @@ function wishTick(st, k, sp, fx, ctx, n = 1) {
 function harvestPlot(st, i, role, together, fx, ctx) {
     const P = st.plots[i], C = cnt(st), bothJoined = st.joined.gui && st.joined.nhan;
     const S = SPECIES[P.sp], perfect = P.perfect && P.q >= 1.3 && !P.faded, W = weatherAt(st), lucky = role && st.luck > 0;
-    const dew = Math.round(S.reward * P.q * (P.faded ? 0.3 : 1) * (together ? 1.1 : 1) * (perfect ? (S.perfectX || 1.5) : 1) * (W === 'rainbow' ? 1.5 : 1) * (st.tools.keovang ? 1.2 : 1) * (lucky ? 2 : 1) * (P.shiny ? 2.5 : 1) * (P.hy ? 1.5 : 1));
-    const sp = P.sp, shiny = !!P.shiny; st.inv.dew += dew; C.dew += dew; st.stats.harvest++; if (perfect) st.stats.perfect++;
+    const dew = Math.round(S.reward * P.q * (P.faded ? 0.3 : 1) * (together ? 1.1 : 1) * (perfect ? (S.perfectX || 1.5) : 1) * (W === 'rainbow' ? 1.5 : 1) * (st.tools.keovang ? 1.2 : 1) * (lucky ? 2 : 1) * (P.shiny ? 2.5 : 1) * (P.hy ? 1.5 : 1) * (!P.faded && inSeason(st, P.sp) ? 1.5 : 1));
+    const sp = P.sp, shiny = !!P.shiny, faded = P.faded; st.inv.dew += dew; C.dew += dew; st.stats.harvest++; if (perfect) st.stats.perfect++;
     if (role) C.harvest[role]++; else C.auto.harvest++;
     if (lucky) st.luck = 0;
     if (P.faded) st.inv.compost++;
@@ -280,9 +363,10 @@ function harvestPlot(st, i, role, together, fx, ctx) {
     if (S.spread) { gift = ['cuc', 'bocongcanh', 'huongduong'][Math.floor(ihash(st.seed, st.step, i, 55) * 3)]; giveSeed(st, gift, 2); }
     if (role && (together || !bothJoined)) addXp(st, W === 'rainbow' ? 2 : 1, fx, ctx);
     reset(P, { weed: P.weed, left: LEAVE_GRACE });
-    fx.push({ k: 'harvest', i, sp, dew, perfect, gift, rainbow: W === 'rainbow', lucky, shiny, hy, role: role || undefined, by: role ? undefined : 'cun' });
+    fx.push({ k: 'harvest', i, sp, dew, perfect, gift, rainbow: W === 'rainbow', lucky, shiny, hy, season: !faded && inSeason(st, sp) || undefined, role: role || undefined, by: role ? undefined : 'cun' });
     if (role) { wishTick(st, 'harvest', sp, fx, ctx); if (perfect) wishTick(st, 'perfect', sp, fx, ctx); }
-    if (S.note) unlockNote(st, fx, ctx);
+    if (!faded) seasonHarvest(st, sp, fx, ctx);
+    if (S.note) unlockNote(st, fx, ctx, 'songtam');
 }
 // chọn hạt để gieo tự động: ưu tiên loài chưa có trong sổ, rồi loài có nhiều hạt nhất (không tự gieo Song Tâm)
 function autoSeed(st) {
@@ -364,8 +448,9 @@ function stepSim(st, together, awake, ctx, fx) {
     st.until ||= {}; st.cd ||= {};
     const night = isNight(st.gt), W = weatherAt(st), C = cnt(st), D = st.decor;
     const b = Math.floor(st.gt / WEATHER_LEN); if (b !== st.wb) { st.wb = b; C.w[W] = (C.w[W] || 0) + 1; fx.push({ k: 'weather', w: W }); }
-    const weedK = 1, bugK = (W === 'fog' ? 1.6 : 1) * (active(st, 'nobug') ? 0 : 1), bothJoined = st.joined.gui && st.joined.nhan;
-    const dryW = W === 'heat' ? 1.7 : W === 'fog' ? 0.5 : W === 'cloud' ? 0.8 : 1, mist = active(st, 'mist'), shield = active(st, 'shield');
+    seasonTick(st, fx);
+    const weedK = 1, bugK = (W === 'fog' ? 1.6 : 1) * (active(st, 'nobug') || W === 'snow' ? 0 : 1), bothJoined = st.joined.gui && st.joined.nhan;
+    const dryW = W === 'heat' ? 1.7 : W === 'fog' ? 0.5 : W === 'snow' ? 0.4 : W === 'cloud' ? 0.8 : 1, mist = active(st, 'mist'), shield = active(st, 'shield');
     const spreadK = W === 'wind' ? 2 : 1, quest = bloomQuest(st), cat = st.ev && st.ev.k === 'meo' ? st.ev.i : -1;
     st.plots.forEach((P, i) => {
         if (P.st === 'wild' || P.st === 'locked') return;
@@ -417,6 +502,7 @@ function stepSim(st, together, awake, ctx, fx) {
             if (P.bug) m *= 0.5;
             if (P.hp < 0.6) m *= 0.3;
             if (night) m *= 0.8;
+            if (W === 'snow' && !inSeason(st, P.sp)) m *= 0.7; // tuyết: cây lớn chậm, trừ hoa mùa đông
             if (S.dayOnly && night) m = 0;
             if (S.together && bothJoined && !together) m = 0;
             if (i === cat) m = 0; // mèo đang nằm ngủ trên luống
@@ -438,7 +524,7 @@ function stepSim(st, together, awake, ctx, fx) {
     });
     // vườn nở rộ: nhiều bông cùng khoe sắc một lúc
     const open = bloomNow(st);
-    if (open > (st.peak || 0)) { const was = st.peak || 0; st.peak = open; if (was < FULL_BLOOM && open >= FULL_BLOOM) { st.inv.dew += 50; addXp(st, 15, fx, ctx); fx.push({ k: 'fullbloom' }); unlockNote(st, fx, ctx); for (const P of st.plots) if (P.bloom) addHill(st, P.sp, 2, fx); } }
+    if (open > (st.peak || 0)) { const was = st.peak || 0; st.peak = open; if (was < FULL_BLOOM && open >= FULL_BLOOM) { st.inv.dew += 50; addXp(st, 15, fx, ctx); fx.push({ k: 'fullbloom' }); unlockNote(st, fx, ctx, 'bloom'); for (const P of st.plots) if (P.bloom) addHill(st, P.sp, 2, fx); } }
     if (quest && open >= FULL_BLOOM) { st.rong = true; fx.push({ k: 'quest' }); } // hoàn thành sự kiện ẩn -> mở Lễ hội hoa
     // đồi hoa tự sinh sôi: mỗi bông thỉnh thoảng gieo thêm 1–3 bông cùng loài (khi có người trong vườn; hai người thì nhanh hơn)
     const hl = (st.hill || '').length;
@@ -450,6 +536,12 @@ function stepSim(st, together, awake, ctx, fx) {
             addHill(st, null, 1 + Math.floor(ihash(st.seed, st.step, 700 + e, 2) * 3), fx, code);
         }
     }
+    // gió thổi bay hoa trên đồi: mỗi bông có một xác suất nhỏ bị cuốn đi, giữ đồi không phủ kín quá nhanh (không tính lúc đoạn kết đang chạy)
+    const gust = st.gt < (st.gust || 0), hw = (HILL_WIND_LOSS[W] || 0) + (gust ? HILL_GUST_LOSS : 0), hl2 = (st.hill || '').length;
+    if (awake && hw && hl2 && !st.fw && !(st.liftAt && !st.done)) {
+        const x = hl2 * hw / 60 * STEP, n = Math.floor(x) + (chance(st, 97, 3, x - Math.floor(x)) ? 1 : 0);
+        if (n) { st.hill = st.hill.slice(0, hl2 - n); fx.push({ k: 'hillWind', n, w: HILL_WIND_LOSS[W] ? W : 'gust' }); }
+    }
     // điều ước
     if (st.gt > 120) refreshWishes(st);
     // ở cùng nhau thì gắn kết tăng dần (2 điểm/phút); người kia chưa từng vào vườn thì một mình cũng tăng, nhưng chậm một nửa
@@ -458,7 +550,7 @@ function stepSim(st, together, awake, ctx, fx) {
     // sự kiện ngẫu nhiên: hết hạn thì kết thúc; mỗi phút mới có thể xảy ra một sự kiện
     if (st.ev && st.gt >= st.ev.end) endEvent(st, fx);
     const mn = Math.floor(st.gt / 60);
-    if (mn !== st.evMin) { st.evMin = mn; if (awake && !st.ev && !st.fw && !st.liftAt && st.gt > 150 && ihash(st.seed, mn, 501, 1) < 0.3) rollEvent(st, ctx, fx); }
+    if (mn !== st.evMin) { st.evMin = mn; if (awake && !st.ev && !st.fw && (!st.liftAt || st.done) && st.gt > 150 && ihash(st.seed, mn, 501, 1) < 0.3) rollEvent(st, ctx, fx); }
 }
 
 /** Cho thời gian trôi tới `nowMs`. online: các vai đang trong vườn. Trả về các sự kiện (nở, héo, sâu...). */
@@ -501,8 +593,24 @@ export function apply(st, role, m, now, ctx = {}) {
     const P = Number.isInteger(m.i) && m.i >= 0 && m.i < st.plots.length ? st.plots[m.i] : null, i = m.i, C = cnt(st);
     st.tools ||= {}; st.inv.phanvang ||= 0; st.cd ||= {}; st.until ||= {}; st.mail ||= {};
     const ok = (f) => { R.changed = true; f.role = role; fx.push(f); };
-    const busy = st.fw || st.liftAt;
+    const busy = st.fw; // chỉ khoá lúc chờ vuốt gọi gió (đoạn kết đang chiếu thì máy người chơi tự chặn chạm vào vườn)
+    if (m.type !== 'wind' && m.type !== 'cur') { const v = visit(st, role, now); if (v.length) { R.changed = true; fx.push(...v); } } // cây kỷ niệm: ghé vườn hôm nay
     switch (m.type) {
+        case 'capsule': { // thư hẹn giờ (sau Lễ hội): niêm phong, mở vào 00:00 (giờ Việt Nam) của ngày thứ `days` kể từ hôm nay
+            const tx = String(m.tx || '').replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 600), days = Math.round(+m.days);
+            st.caps ||= [];
+            if (!st.done || !tx || !(days >= 1 && days <= 730) || st.caps.filter(c => c.r === role && c.open > now).length >= CAP_MAX) break;
+            st.caps.push({ id: now, r: role, to: other(role), tx, at: now, open: (vnDay(now) + days) * 86400e3 - 7 * 3600e3, read: 0 });
+            if (st.caps.length > 60) st.caps.splice(0, st.caps.length - 60);
+            ok({ k: 'capsule', days });
+            break;
+        }
+        case 'capread': { // mở thư hẹn giờ đã tới ngày
+            const c = (st.caps || []).find(c => c.id === m.id);
+            if (!c || c.read || c.open > now || capTo(st, c) !== role) break;
+            c.read = now; ok({ k: 'capread' });
+            break;
+        }
         case 'expand': { // mua thêm một luống (phải nằm cạnh luống đã có)
             if (!P || busy || !canExpand(st, i)) break;
             const price = plotPrice(st); if (st.inv.dew < price) break;
@@ -619,10 +727,14 @@ export function apply(st, role, m, now, ctx = {}) {
             if (!canFinale(st) || st.fw) break;
             st.fw = true; st.swipes = { gui: 0, nhan: 0 }; st.liftAt = 0; st.ev = null; ok({ k: 'finale' });
             break;
+        case 'gust': // vuốt màn hình: gió trong vườn mạnh thêm một lúc, hoa trên đồi dễ bị thổi bay hơn
+            if (st.fw || (st.liftAt && !st.done)) break;
+            st.gust = st.gt + GUST_TIME; R.changed = true;
+            break;
         case 'swipe':
             if (!st.fw || st.liftAt) break;
             st.swipes[role]++; R.changed = true; fx.push({ k: 'swipe', role });
-            if (st.swipes.gui + st.swipes.nhan >= 6 && (!bothJoined || (st.swipes.gui > 0 && st.swipes.nhan > 0))) { st.liftAt = now; st.fw = false; st.done = true; fx.push({ k: 'lift' }); }
+            if (st.swipes.gui + st.swipes.nhan >= 6 && (!bothJoined || (st.swipes.gui > 0 && st.swipes.nhan > 0))) { st.liftAt = now; st.fw = false; st.done = true; st.sf = Math.floor(st.gt / DAY) * DAY; fx.push({ k: 'lift' }); for (const r of ROLES) if (online.includes(r)) fx.push(...visit(st, r, now)); }
             break;
         case 'answer':
             if (ctx.mode !== 'to-tinh' || role !== 'nhan' || !st.done || !['yes', 'think'].includes(m.v)) break;
@@ -659,6 +771,14 @@ export function apply(st, role, m, now, ctx = {}) {
                 case 'finale': for (const s of SPECIES_ORDER) st.book[s] = st.book[s] || 1; st.peak = Math.max(st.peak || 0, FULL_BLOOM); st.rong = true; if (st.lvl < 3) addXp(st, xpFor(3) - st.xp, fx, ctx); break;
                 case 'unanswer': st.answer = null; break;
                 case 'unlift': st.liftAt = 0; st.fw = false; st.done = false; break;
+                case 'season': if (st.sf != null) st.sf -= SEASON_DAYS * DAY; break; // sang mùa sau
+                case 'seasonfest': if (st.sea && !st.sea.fest) st.sea.have = SEASON_GOAL - 1; break;
+                case 'memday': { // giả như đã sang ngày mới và cả hai đều ghé
+                    const M = st.mem ||= { days: 0, streak: 0, best: 0, last: -1, seen: {} };
+                    M.seen = {}; M.last = vnDay(now) - 1; for (const r of ROLES) fx.push(...visit(st, r, now));
+                    break;
+                }
+                case 'capopen': for (const c of st.caps || []) c.open = Math.min(c.open, now); break;
                 default: return R;
             }
             R.changed = true; fx.push({ k: 'cheat', what: m.what, role });

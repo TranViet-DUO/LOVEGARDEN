@@ -1,16 +1,20 @@
 // Kết nối khu vườn chung.
-//  - Online: WebSocket tới /ws/<slug> (máy chủ Durable Object giữ trạng thái, tự kết nối lại khi rớt mạng, đồng bộ lại mỗi 15 giây).
+//  - Online: WebSocket tới /ws/<slug> (máy chủ Durable Object giữ trạng thái, tự kết nối lại khi rớt mạng, đồng bộ lại mỗi 30 giây;
+//    giữa hai lần, trình duyệt tự `advance` nên vẫn mượt, còn Durable Object được ngủ). Vườn đã bị xoá (410) -> về trang chủ.
 //  - Chơi thử (/play): "khu vườn ảo" chạy cùng luật chơi ngay trong trình duyệt, lưu tạm trong máy (localStorage).
 // Cả hai có dạng { send(msg), get live() } và gọi onMessage(msg) cho mọi tin từ "máy chủ".
-import { advance, apply, freshState, V } from './rules.js';
+import { advance, apply, freshState, visit, V } from './rules.js';
 
 export function connectGarden(slug, onMessage, onStatus = () => { }) {
-    let ws = null, live = false, wait = 500, queue = [], timer = 0;
+    let ws = null, live = false, wait = 500, queue = [], timer = 0, fails = 0;
     const open = () => {
         ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/${encodeURIComponent(slug)}`);
-        ws.onopen = () => { live = true; wait = 500; onStatus(true); for (const m of queue.splice(0)) ws.send(m); clearInterval(timer); timer = setInterval(() => ws.readyState === 1 && ws.send('{"type":"sync"}'), 15000); };
+        ws.onopen = () => { live = true; wait = 500; fails = 0; onStatus(true); for (const m of queue.splice(0)) ws.send(m); clearInterval(timer); timer = setInterval(() => ws.readyState === 1 && ws.send('{"type":"sync"}'), 30000); };
         ws.onmessage = e => { try { const m = JSON.parse(e.data); if (m.type !== 'pong') onMessage(m); } catch { } };
-        ws.onclose = () => { live = false; onStatus(false); clearInterval(timer); setTimeout(open, wait); wait = Math.min(8000, wait * 1.8); };
+        ws.onclose = () => {
+            live = false; onStatus(false); clearInterval(timer); setTimeout(open, wait); wait = Math.min(8000, wait * 1.8);
+            if (++fails === 3) fetch('/api/card/' + encodeURIComponent(slug)).then(r => { if (r.status === 410) location.href = '/?het'; }).catch(() => { });
+        };
     };
     open();
     addEventListener('visibilitychange', () => { if (!document.hidden && ws.readyState === 1) ws.send('{"type":"sync"}'); });
@@ -28,7 +32,8 @@ export function localGarden(role, card, notes, onMessage) {
     st.joined = { [role]: true };
     const emit = fx => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch { } onMessage(JSON.parse(JSON.stringify({ type: 'state', st, now: Date.now(), online: [role], fx, notes: notes.slice(0, st.notes) }))); };
     advance(st, Date.now(), [], ctx); // thời gian vắng mặt trôi chậm (vườn ngủ)
-    setTimeout(() => emit([]));
+    const hello = visit(st, role, Date.now()); // cây kỷ niệm: ghé vườn hôm nay
+    setTimeout(() => emit(hello));
     addEventListener('pagehide', () => { advance(st, Date.now(), [role], ctx); try { localStorage.setItem(KEY, JSON.stringify(st)); } catch { } });
     return {
         live: true,
